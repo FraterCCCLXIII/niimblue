@@ -13,16 +13,34 @@
 
   let { selectedText, editRevision, valueUpdated }: Props = $props();
 
-  let sizeMin: number = 1;
-  let sizeMax: number = 999;
+  const sizeMin = 1;
+  const sizeMax = 999;
+  const fontSizes = [8, 10, 12, 14, 16, 18, 20, 24, 28, 32, 36, 40, 48, 56, 64, 72];
+  const printRed = "#ff3b30";
 
-  const setXAlign = (align: fabric.TOriginX) => {
+  const normalizedAngle = $derived((((selectedText.angle ?? 0) % 360) + 360) % 360);
+  const textDirection = $derived<"horizontal" | "vertical" | "rotate">(
+    normalizedAngle >= 45 && normalizedAngle < 135 ? "vertical" : normalizedAngle >= 225 && normalizedAngle < 315 ? "rotate" : "horizontal",
+  );
+  const fillColor = $derived(String(selectedText.fill ?? "black").toLowerCase());
+  const isRed = $derived(fillColor === "red" || fillColor === printRed || fillColor === "#ff0000" || fillColor === "#e31c23" || fillColor === "#ff4d4f");
+  const background = $derived(String(selectedText.backgroundColor || "transparent").toLowerCase());
+  const isReversed = $derived(background !== "" && background !== "transparent" && background !== "white" && background !== "#ffffff");
+  const printColor = $derived(isRed ? printRed : "black");
+  const kerningValue = $derived(Math.round((selectedText.charSpacing ?? 0) / 10));
+  const spacingValue = $derived(Math.round(((selectedText.lineHeight ?? 1) - 1) * 10));
+  const sizeOptions = $derived(
+    fontSizes.includes(Math.round(selectedText.fontSize))
+      ? fontSizes
+      : [...fontSizes, Math.round(selectedText.fontSize)].sort((a, b) => a - b),
+  );
+
+  const setXAlign = (align: fabric.TextboxProps["textAlign"]) => {
     selectedText.set({ textAlign: align });
     valueUpdated();
   };
 
   const setYAlign = (align: fabric.TOriginY) => {
-    // change object origin, but keep position
     const pos = selectedText.getPointByOrigin("left", "top");
     selectedText.set({ originY: align });
     selectedText.setPositionByOrigin(pos, "left", "top");
@@ -30,20 +48,17 @@
   };
 
   const toggleBold = () => {
-    if (selectedText.fontWeight === "bold") {
-      selectedText.fontWeight = "normal";
-    } else {
-      selectedText.fontWeight = "bold";
-    }
+    selectedText.fontWeight = selectedText.fontWeight === "bold" ? "normal" : "bold";
     valueUpdated();
   };
 
   const toggleItalic = () => {
-    if (selectedText.fontStyle === "italic") {
-      selectedText.fontStyle = "normal";
-    } else {
-      selectedText.fontStyle = "italic";
-    }
+    selectedText.fontStyle = selectedText.fontStyle === "italic" ? "normal" : "italic";
+    valueUpdated();
+  };
+
+  const toggleUnderline = () => {
+    selectedText.set({ underline: !selectedText.underline });
     valueUpdated();
   };
 
@@ -60,228 +75,253 @@
   };
 
   const fontSizeUp = () => {
-    let s = selectedText.fontSize;
-    selectedText.set({ fontSize: Math.min(s > 40 ? Math.round(s * 1.1) : s + 2, sizeMax) });
+    const size = selectedText.fontSize;
+    selectedText.set({ fontSize: Math.min(size > 40 ? Math.round(size * 1.1) : size + 2, sizeMax) });
     valueUpdated();
   };
 
   const fontSizeDown = () => {
-    let s = selectedText.fontSize;
-    selectedText.set({ fontSize: Math.max(s > 40 ? Math.round(s * 0.9) : s - 2, sizeMin) });
-    valueUpdated();
-  };
-
-  const lineHeightChange = (v: number) => {
-    v = isNaN(v) ? 1 : v;
-    selectedText.set({ lineHeight: v });
+    const size = selectedText.fontSize;
+    selectedText.set({ fontSize: Math.max(size > 40 ? Math.round(size * 0.9) : size - 2, sizeMin) });
     valueUpdated();
   };
 
   const fontSizeChange = (v: number) => {
-    v = isNaN(v) ? 1 : Math.min(Math.max(v, sizeMin), sizeMax);
-    selectedText.set({ fontSize: v });
+    selectedText.set({ fontSize: isNaN(v) ? 1 : Math.min(Math.max(v, sizeMin), sizeMax) });
     valueUpdated();
   };
 
-  const fillChanged = (value: string) => {
-    selectedText.set({ fill: value });
+  const setKerning = (next: number) => {
+    selectedText.set({ charSpacing: Math.max(-200, Math.min(200, next * 10)) });
     valueUpdated();
   };
 
-  const splitChanged = (value: string) => {
+  const setLineSpacing = (next: number) => {
+    selectedText.set({ lineHeight: Math.max(0.1, Math.min(10, 1 + next / 10)) });
+    valueUpdated();
+  };
+
+  const applyPrintColor = (color: string, reversed = isReversed) => {
+    if (reversed) {
+      selectedText.set({ fill: "white", backgroundColor: color });
+    } else {
+      selectedText.set({ fill: color, backgroundColor: "transparent" });
+    }
+    valueUpdated();
+  };
+
+  const toggleReverse = () => {
+    applyPrintColor(printColor, !isReversed);
+  };
+
+  const setTextDirection = (direction: "horizontal" | "vertical" | "rotate") => {
+    const angle = direction === "vertical" ? 90 : direction === "rotate" ? 270 : 0;
+    selectedText.rotate(angle);
+    valueUpdated();
+  };
+
+  const textChanged = (value: string) => {
+    selectedText.set({ text: value });
+    valueUpdated();
+  };
+
+  const splitChanged = (wrapByWord: boolean) => {
     if (selectedText instanceof fabric.Textbox) {
-      selectedText.set({ splitByGrapheme: value === "grapheme" });
+      selectedText.set({ splitByGrapheme: !wrapByWord });
       valueUpdated();
     }
   };
-
-  const backgroundColorChanged = (value: string) => {
-    selectedText.set({ backgroundColor: value });
-    valueUpdated();
-  };
-
-  const editInPopup = () => {
-    const text = prompt($tr("params.text.edit.title"), selectedText.text);
-    if (text !== null) {
-      selectedText.set({ text });
-      selectedText.isEditing = false;
-      valueUpdated();
-    }
-  };
-
-
 </script>
 
-<!-- Fix component not updating when selectedText changes. I didn't find a better way to do this. -->
-<input type="hidden" value={editRevision}>
+<input type="hidden" value={editRevision} />
 
-<button
-  title={$tr("params.text.align.left")}
-  class="btn btn-sm {selectedText.textAlign === 'left' ? 'btn-secondary' : ''}"
-  onclick={() => setXAlign("left")}><MdIcon icon="format_align_left" /></button>
-<button
-  title={$tr("params.text.align.center")}
-  class="btn btn-sm {selectedText.textAlign === 'center' ? 'btn-secondary' : ''}"
-  onclick={() => setXAlign("center")}><MdIcon icon="format_align_center" /></button>
-<button
-  title={$tr("params.text.align.right")}
-  class="btn btn-sm {selectedText.textAlign === 'right' ? 'btn-secondary' : ''}"
-  onclick={() => setXAlign("right")}><MdIcon icon="format_align_right" /></button>
-<div class="dropdown">
-  <button class="btn btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" title={$tr("params.text.vorigin")}>
-    {#if selectedText.originY === "top"}
-      <MdIcon icon="vertical_align_top" />
-    {:else if selectedText.originY === "center"}
-      <MdIcon icon="vertical_align_center" />
-    {:else if selectedText.originY === "bottom"}
-      <MdIcon icon="vertical_align_bottom" />
-    {/if}
-  </button>
-  <div class="dropdown-menu p-2">
-    <button
-      class="btn btn-sm {selectedText.originY === 'top' ? 'btn-secondary' : ''}"
-      onclick={() => setYAlign("top")}
-      title={$tr("params.text.vorigin.top")}>
-      <MdIcon icon="vertical_align_top" />
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("params.text.content")}</h3>
+  <textarea
+    class="insp-field insp-textarea"
+    value={selectedText.text}
+    oninput={(e) => textChanged(e.currentTarget.value)}></textarea>
+</section>
+
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("params.text.style")}</h3>
+  <FontFamilyPicker variant="inspector" {editRevision} value={selectedText.fontFamily} valueUpdated={updateFontFamily} />
+
+  <div class="insp-size">
+    <div class="insp-size-step">
+      <button type="button" title={$tr("params.text.font_size.down")} onclick={fontSizeDown}>A-</button>
+      <button type="button" title={$tr("params.text.font_size.up")} onclick={fontSizeUp}>A+</button>
+    </div>
+    <select
+      class="insp-field insp-select"
+      title={$tr("params.text.font_size")}
+      value={Math.round(selectedText.fontSize)}
+      onchange={(e) => fontSizeChange(Number(e.currentTarget.value))}>
+      {#each sizeOptions as size (size)}
+        <option value={size}>{size}</option>
+      {/each}
+    </select>
+  </div>
+
+  <div class="insp-tools">
+    <div class="insp-group">
+      <button
+        type="button"
+        class:is-active={selectedText.textAlign === "left"}
+        title={$tr("params.text.align.left")}
+        onclick={() => setXAlign("left")}>
+        <MdIcon icon="format_align_left" />
+      </button>
+      <button
+        type="button"
+        class:is-active={selectedText.textAlign === "center"}
+        title={$tr("params.text.align.center")}
+        onclick={() => setXAlign("center")}>
+        <MdIcon icon="format_align_center" />
+      </button>
+      <button
+        type="button"
+        class:is-active={selectedText.textAlign === "right"}
+        title={$tr("params.text.align.right")}
+        onclick={() => setXAlign("right")}>
+        <MdIcon icon="format_align_right" />
+      </button>
+      <button
+        type="button"
+        class:is-active={selectedText.textAlign === "justify"}
+        title={$tr("params.text.align.justify")}
+        onclick={() => setXAlign("justify")}>
+        <MdIcon icon="format_align_justify" />
+      </button>
+    </div>
+    <div class="insp-group insp-group--compact">
+      <button
+        type="button"
+        class:is-active={selectedText.originY === "top"}
+        title={$tr("params.text.vorigin.top")}
+        onclick={() => setYAlign("top")}>
+        <MdIcon icon="vertical_align_top" />
+      </button>
+      <button
+        type="button"
+        class:is-active={selectedText.originY === "center"}
+        title={$tr("params.text.vorigin.center")}
+        onclick={() => setYAlign("center")}>
+        <MdIcon icon="vertical_align_center" />
+      </button>
+      <button
+        type="button"
+        class:is-active={selectedText.originY === "bottom"}
+        title={$tr("params.text.vorigin.bottom")}
+        onclick={() => setYAlign("bottom")}>
+        <MdIcon icon="vertical_align_bottom" />
+      </button>
+    </div>
+  </div>
+</section>
+
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.text.formatting")}</span>
+  <div class="insp-fmt">
+    <button type="button" class:is-active={selectedText.fontWeight === "bold"} title={$tr("params.text.bold")} onclick={toggleBold}>
+      <MdIcon icon="format_bold" />
     </button>
-    <button
-      class="btn btn-sm {selectedText.originY === 'center' ? 'btn-secondary' : ''}"
-      onclick={() => setYAlign("center")}
-      title={$tr("params.text.vorigin.center")}>
-      <MdIcon icon="vertical_align_center" />
+    <button type="button" class:is-active={!!selectedText.underline} title={$tr("params.text.underline")} onclick={toggleUnderline}>
+      <MdIcon icon="format_underlined" />
     </button>
-    <button
-      class="btn btn-sm {selectedText.originY === 'bottom' ? 'btn-secondary' : ''}"
-      onclick={() => setYAlign("bottom")}
-      title={$tr("params.text.vorigin.bottom")}>
-      <MdIcon icon="vertical_align_bottom" />
+    <button type="button" class:is-active={selectedText.fontStyle === "italic"} title={$tr("params.text.italic")} onclick={toggleItalic}>
+      <MdIcon icon="format_italic" />
     </button>
   </div>
 </div>
 
-<button
-  class="btn btn-sm {selectedText.fontWeight === 'bold' ? 'btn-secondary' : ''}"
-  title={$tr("params.text.bold")}
-  onclick={toggleBold}>
-  <MdIcon icon="format_bold" />
-</button>
-
-<button
-  class="btn btn-sm {selectedText.fontStyle === 'italic' ? 'btn-secondary' : ''}"
-  title={$tr("params.text.italic")}
-  onclick={toggleItalic}>
-  <MdIcon icon="format_italic" />
-</button>
-
-<div class="dropdown">
-  <button class="btn btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" title={$tr("params.color")}>
-    <MdIcon icon="format_color_fill" />
-  </button>
-
-  <div class="dropdown-menu arrangement p-2">
-    <div class="input-group input-group-sm flex-nowrap color pb-2">
-      <span class="input-group-text">
-        <MdIcon icon="format_color_text" />
-      </span>
-      <select class="form-select" value={selectedText.fill} onchange={(e) => fillChanged(e.currentTarget.value)}>
-        <option value="white">{$tr("params.color.white")}</option>
-        <option value="black">{$tr("params.color.black")}</option>
-      </select>
-    </div>
-    <div class="input-group input-group-sm flex-nowrap color pb-2">
-      <span class="input-group-text">
-        <MdIcon icon="format_color_fill" />
-      </span>
-      <select
-        class="form-select"
-        value={selectedText.backgroundColor || "transparent"}
-        onchange={(e) => backgroundColorChanged(e.currentTarget.value)}>
-        <option value="white">{$tr("params.color.white")}</option>
-        <option value="black">{$tr("params.color.black")}</option>
-        <option value="transparent">{$tr("params.color.transparent")}</option>
-      </select>
-    </div>
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.text.kerning")}</span>
+  <div class="insp-stepper">
+    <button type="button" onclick={() => setKerning(kerningValue - 1)}>-</button>
+    <span>{kerningValue}</span>
+    <button type="button" onclick={() => setKerning(kerningValue + 1)}>+</button>
   </div>
 </div>
+
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.text.line_spacing")}</span>
+  <div class="insp-stepper">
+    <button type="button" onclick={() => setLineSpacing(spacingValue - 1)}>-</button>
+    <span>{spacingValue}</span>
+    <button type="button" onclick={() => setLineSpacing(spacingValue + 1)}>+</button>
+  </div>
+</div>
+
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("params.text.direction")}</h3>
+  <div class="insp-segment">
+    <button
+      type="button"
+      class:is-active={textDirection === "horizontal"}
+      title={$tr("params.text.direction.horizontal")}
+      onclick={() => setTextDirection("horizontal")}>
+      <span class="insp-dir-label">ABC<MdIcon icon="arrow_forward" /></span>
+    </button>
+    <button
+      type="button"
+      class:is-active={textDirection === "vertical"}
+      title={$tr("params.text.direction.vertical")}
+      onclick={() => setTextDirection("vertical")}>
+      <span class="insp-dir-label">ABC<MdIcon icon="arrow_downward" /></span>
+    </button>
+    <button
+      type="button"
+      class:is-active={textDirection === "rotate"}
+      title={$tr("params.text.direction.rotate")}
+      onclick={() => setTextDirection("rotate")}>
+      <span class="insp-dir-label">ABC<MdIcon icon="rotate_left" /></span>
+    </button>
+  </div>
+</section>
+
+<div class="insp-row">
+  <span class="insp-row__label">
+    {$tr("params.color")}
+    <span class="insp-help" title={$tr("params.color.help")}><MdIcon icon="help" /></span>
+  </span>
+  <div class="insp-swatches">
+    <button
+      type="button"
+      class="insp-swatch is-black"
+      class:is-active={!isRed}
+      title={$tr("params.color.black")}
+      onclick={() => applyPrintColor("black")}></button>
+    <button
+      type="button"
+      class="insp-swatch is-red"
+      class:is-active={isRed}
+      title={$tr("params.color.red")}
+      onclick={() => applyPrintColor(printRed)}></button>
+  </div>
+</div>
+
+<label class="insp-check">
+  <input type="checkbox" checked={isReversed} onchange={toggleReverse} />
+  <span>
+    {$tr("params.text.reverse")}
+    <span class="insp-help" title={$tr("params.text.reverse.help")}><MdIcon icon="help" /></span>
+  </span>
+</label>
 
 {#if selectedText instanceof fabric.Textbox}
-  <div class="dropdown">
-    <button class="btn btn-sm dropdown-toggle" type="button" data-bs-toggle="dropdown" title={$tr("params.params.text.split")}>
-      <MdIcon icon="wrap_text" />
-    </button>
-
-    <div class="dropdown-menu arrangement p-2">
-      <div class="input-group input-group-sm flex-nowrap split pb-2">
-        <select class="form-select" value={selectedText.splitByGrapheme ? "grapheme" : "space"} onchange={(e) => splitChanged(e.currentTarget.value)}>
-          <option value="space">{$tr("params.params.text.split.spaces")}</option>
-          <option value="grapheme">{$tr("params.params.text.split.grapheme")}</option>
-        </select>
-      </div>
-    </div>
-  </div>
+  <label class="insp-check">
+    <input type="checkbox" checked={!selectedText.splitByGrapheme} onchange={(e) => splitChanged(e.currentTarget.checked)} />
+    <span>
+      {$tr("params.text.wrap_word")}
+      <span class="insp-help" title={$tr("params.text.wrap_word.help")}><MdIcon icon="help" /></span>
+    </span>
+  </label>
 {/if}
 
 {#if selectedText instanceof TextboxExt}
-  <!-- fixme: Custom property not auto-rendered for some reason -->
-  <button
-    class="btn btn-sm {selectedText.fontAutoSize ? 'btn-secondary' : ''}"
-    title={$tr("params.text.autosize")}
-    data-ver={editRevision}
-    onclick={toggleFontAutoSize}>
-    <MdIcon icon="expand" class="r-90" />
-  </button>
+  <label class="insp-check">
+    <input type="checkbox" checked={selectedText.fontAutoSize} onchange={toggleFontAutoSize} />
+    <span>{$tr("params.text.autosize")}</span>
+  </label>
 {/if}
-
-
-<div class="input-group flex-nowrap input-group-sm font-size">
-  <span class="input-group-text" title={$tr("params.text.font_size")}><MdIcon icon="format_size" /></span>
-  <input
-    type="number"
-    min={sizeMin}
-    max={sizeMax}
-    step="2"
-    class="form-control"
-    value={selectedText.fontSize}
-    oninput={(e) => fontSizeChange(e.currentTarget.valueAsNumber)} />
-  <button class="btn btn-secondary" title={$tr("params.text.font_size.up")} onclick={fontSizeUp}>
-    <MdIcon icon="text_increase" />
-  </button>
-  <button class="btn btn-secondary" title={$tr("params.text.font_size.down")} onclick={fontSizeDown}>
-    <MdIcon icon="text_decrease" />
-  </button>
-</div>
-
-<div class="input-group flex-nowrap input-group-sm">
-  <span class="input-group-text" title={$tr("params.text.line_height")}>
-    <MdIcon icon="density_medium" />
-  </span>
-  <input
-    type="number"
-    min="0.1"
-    step="0.1"
-    max="10"
-    class="form-control"
-    value={selectedText.lineHeight}
-    oninput={(e) => lineHeightChange(e.currentTarget.valueAsNumber)} />
-</div>
-
-<FontFamilyPicker {editRevision} value={selectedText.fontFamily} valueUpdated={updateFontFamily} />
-
-<button class="btn btn-sm btn-secondary" onclick={editInPopup} title={$tr("params.text.edit")}>
-  <MdIcon icon="edit" />
-</button>
-
-<style>
-  .input-group {
-    width: 7em;
-  }
-  .font-size {
-    width: 12em;
-  }
-  .input-group.color {
-    width: 12em;
-  }
-  .input-group.split {
-    width: 14em;
-  }
-</style>

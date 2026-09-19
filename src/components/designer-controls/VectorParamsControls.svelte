@@ -1,6 +1,5 @@
 <script lang="ts">
   import { tr } from "$/utils/i18n";
-  import MdIcon from "$/components/basic/MdIcon.svelte";
   import * as fabric from "fabric";
 
   interface Props {
@@ -10,6 +9,12 @@
   }
 
   let { selectedObject, editRevision, valueUpdated }: Props = $props();
+
+  const isShape =
+    selectedObject instanceof fabric.Rect ||
+    selectedObject instanceof fabric.Circle ||
+    selectedObject instanceof fabric.Line ||
+    selectedObject instanceof fabric.Polyline;
 
   const roundRadiusChanged = (value: number) => {
     const rect = selectedObject as fabric.Rect;
@@ -31,46 +36,37 @@
   };
 </script>
 
-<input type="hidden" value={editRevision}>
+<input type="hidden" value={editRevision} />
 
 {#if selectedObject instanceof fabric.Rect}
-  <div class="input-group flex-nowrap input-group-sm">
-    <span class="input-group-text" title={$tr("params.vector.round_radius")}>
-      <MdIcon icon="rounded_corner" />
-    </span>
+  <div class="insp-row">
+    <span class="insp-row__label">{$tr("params.vector.round_radius")}</span>
     <input
       type="number"
       min="0"
       max={Math.min(selectedObject.width, selectedObject.height) / 2}
-      class="form-control"
+      class="insp-field insp-field-narrow"
       value={selectedObject.rx}
       oninput={(e) => roundRadiusChanged(e.currentTarget.valueAsNumber)} />
   </div>
 {/if}
 
-{#if selectedObject instanceof fabric.Rect || selectedObject instanceof fabric.Circle || selectedObject instanceof fabric.Line || selectedObject instanceof fabric.Polyline}
-  <div class="input-group flex-nowrap input-group-sm">
-    <span class="input-group-text" title={$tr("params.vector.stroke_width")}>
-      <MdIcon icon="line_weight" />
-    </span>
+{#if isShape}
+  <div class="insp-row">
+    <span class="insp-row__label">{$tr("params.vector.stroke_width")}</span>
     <input
       type="number"
       min="1"
-      class="form-control"
+      class="insp-field insp-field-narrow"
       value={selectedObject.strokeWidth}
       oninput={(e) => strokeWidthChanged(e.currentTarget.valueAsNumber)} />
   </div>
 {/if}
 
 {#if selectedObject instanceof fabric.Rect || selectedObject instanceof fabric.Circle}
-  <div class="input-group input-group-sm flex-nowrap fill">
-    <span class="input-group-text" title={$tr("params.vector.fill")}>
-      <MdIcon icon="format_color_fill" />
-    </span>
-    <select
-      class="form-select"
-      value={selectedObject.fill}
-      onchange={(e) => fillChanged(e.currentTarget.value)}>
+  <div class="insp-row">
+    <span class="insp-row__label">{$tr("params.vector.fill")}</span>
+    <select class="insp-field insp-select insp-field-narrow" value={selectedObject.fill} onchange={(e) => fillChanged(e.currentTarget.value)}>
       <option value="transparent">{$tr("params.color.transparent")}</option>
       <option value="white">{$tr("params.color.white")}</option>
       <option value="black">{$tr("params.color.black")}</option>
@@ -79,10 +75,7 @@
 {/if}
 
 <style>
-  .input-group {
-    width: 7em;
-  }
-  .input-group.fill {
-    width: 12em;
+  .insp-field-narrow {
+    width: 108px;
   }
 </style>

@@ -1,39 +1,37 @@
 <script lang="ts">
-  import { iconCodepoints, type MaterialIcon } from "$/styles/mdi_icons";
+  import { type AppIconName, uiIconToSvg } from "$/utils/lucide_icons";
+
   interface Props {
-    icon: MaterialIcon;
+    icon: AppIconName;
     class?: string;
   }
 
   let { icon, class: className = "" }: Props = $props();
+
+  const svg = $derived(uiIconToSvg(icon));
 </script>
 
-<span class="mdi {className}">
-  {String.fromCodePoint(iconCodepoints[icon])}
+<span class="app-icon {className}">
+  {@html svg}
 </span>
 
 <style>
-  .mdi {
-    font-family: "Material Icons";
-    font-weight: normal;
-    font-style: normal;
+  .app-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
     line-height: 1;
-    font-size: 1.5em;
-    vertical-align: -0.24em;
-    /*vertical-align: middle;*/
-    letter-spacing: normal;
-    text-transform: none;
-    display: inline-block;
-    white-space: nowrap;
-    word-wrap: normal;
-    direction: ltr;
-    -webkit-font-smoothing: antialiased;
-    -moz-osx-font-smoothing: grayscale;
-    text-rendering: optimizeLegibility;
-    font-feature-settings: "liga";
+    vertical-align: -0.125em;
+    color: inherit;
   }
 
-  .mdi.r-90 {
+  .app-icon :global(svg) {
+    display: block;
+    width: 1.25em;
+    height: 1.25em;
+  }
+
+  .app-icon.r-90 {
     transform: rotate(90deg);
   }
 </style>

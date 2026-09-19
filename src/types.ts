@@ -6,7 +6,18 @@ export type ConnectionState = "connecting" | "connected" | "disconnected";
 export type ConnectionType = "bluetooth" | "serial" | "capacitor-ble";
 
 export type LabelUnit = "mm" | "px";
-export type OjectType = "text" | "rectangle" | "line" | "circle" | "image" | "qrcode" | "barcode" | "aruco" | "pdf";
+export type OjectType =
+  | "text"
+  | "rectangle"
+  | "line"
+  | "circle"
+  | "image"
+  | "qrcode"
+  | "barcode"
+  | "aruco"
+  | "pdf"
+  | "time"
+  | "sn";
 export type PostProcessType = "threshold" | "dither" | "bayer2" | "bayer4" | "bayer8" | "floyd_steinberg" | "jjn" | "stucki";
 export type MoveDirection = "up" | "down" | "left" | "right";
 export type LabelShape = "rect" | "rounded_rect" | "circle";
@@ -73,6 +84,27 @@ export const ExportedLabelTemplateSchema = z.object({
 
 const [firstTask, ...otherTasks] = printTaskNames;
 
+export const PrintHistoryEntrySchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  timestamp: z.number().positive(),
+  copies: z.number().gte(1),
+  pages: z.number().gte(1).optional(),
+  thumbnailBase64: z.string().optional(),
+  sourceId: z.string().optional(),
+  size: z.object({
+    width: z.number().positive(),
+    height: z.number().positive(),
+  }),
+});
+
+export const RecentLabelEntrySchema = z.object({
+  id: z.string(),
+  openedAt: z.number().positive(),
+});
+
+export const PrintCountMapSchema = z.record(z.string(), z.number().gte(0));
+
 export const PreviewPropsOffsetSchema = z.object({
   x: z.number(),
   y: z.number(),
@@ -134,3 +166,6 @@ export type PreviewProps = z.infer<typeof PreviewPropsSchema>;
 export type AutomationProps = z.infer<typeof AutomationPropsSchema>;
 export type AppConfig = z.infer<typeof AppConfigSchema>;
 export type UserFont = z.infer<typeof UserFontSchema>;
+export type PrintHistoryEntry = z.infer<typeof PrintHistoryEntrySchema>;
+export type RecentLabelEntry = z.infer<typeof RecentLabelEntrySchema>;
+export type PrintCountMap = z.infer<typeof PrintCountMapSchema>;

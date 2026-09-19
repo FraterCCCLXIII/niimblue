@@ -1,7 +1,6 @@
 <script lang="ts">
   import { Barcode } from "$/fabric-object/barcode";
   import { tr } from "$/utils/i18n";
-  import MdIcon from "$/components/basic/MdIcon.svelte";
 
   interface Props {
     selectedBarcode: Barcode;
@@ -12,12 +11,23 @@
   let { selectedBarcode, editRevision, valueUpdated }: Props = $props();
 </script>
 
-<input type="hidden" value={editRevision}>
+<input type="hidden" value={editRevision} />
 
-<div class="input-group input-group-sm flex-nowrap">
-  <span class="input-group-text" title={$tr("params.barcode.encoding")}><MdIcon icon="code" /></span>
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("params.text.content")}</h3>
+  <textarea
+    class="insp-field insp-textarea"
+    value={selectedBarcode.text}
+    oninput={(e) => {
+      selectedBarcode?.set("text", e.currentTarget.value);
+      valueUpdated();
+    }}></textarea>
+</section>
+
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.barcode.encoding")}</span>
   <select
-    class="form-select"
+    class="insp-field insp-select insp-field-narrow"
     value={selectedBarcode.encoding}
     onchange={(e) => {
       selectedBarcode?.set("encoding", e.currentTarget.value ?? "EAN13");
@@ -28,12 +38,10 @@
   </select>
 </div>
 
-<div class="input-group input-group-sm flex-nowrap">
-  <span class="input-group-text" title={$tr("params.barcode.scale")}>
-    <MdIcon icon="settings_ethernet" />
-  </span>
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.barcode.scale")}</span>
   <input
-    class="barcode-width form-control"
+    class="insp-field insp-field-narrow"
     type="number"
     min="1"
     value={selectedBarcode.scaleFactor}
@@ -43,22 +51,10 @@
     }} />
 </div>
 
-<button
-  class="btn btn-sm {selectedBarcode.printText ? 'btn-secondary' : ''}"
-  title={$tr("params.barcode.enable_caption")}
-  onclick={() => {
-    selectedBarcode?.set("printText", !selectedBarcode.printText);
-    valueUpdated();
-  }}>
-  123
-</button>
-
-<div class="input-group input-group-sm flex-nowrap">
-  <span class="input-group-text" title={$tr("params.barcode.font_size")}>
-    <MdIcon icon="format_size" />
-  </span>
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.barcode.font_size")}</span>
   <input
-    class="barcode-width form-control"
+    class="insp-field insp-field-narrow"
     type="number"
     min="1"
     value={selectedBarcode.fontSize}
@@ -68,25 +64,19 @@
     }} />
 </div>
 
-<textarea
-  class="barcode-content form-control"
-  value={selectedBarcode.text}
-  oninput={(e) => {
-    selectedBarcode?.set("text", e.currentTarget.value);
-    valueUpdated();
-  }}></textarea>
-
+<label class="insp-check">
+  <input
+    type="checkbox"
+    checked={selectedBarcode.printText}
+    onchange={() => {
+      selectedBarcode?.set("printText", !selectedBarcode.printText);
+      valueUpdated();
+    }} />
+  <span>{$tr("params.barcode.enable_caption")}</span>
+</label>
 
 <style>
-  .input-group {
-    width: fit-content;
-  }
-
-  textarea.barcode-content {
-    height: 100px;
-  }
-
-  input.barcode-width {
-    max-width: 64px;
+  .insp-field-narrow {
+    width: 132px;
   }
 </style>

@@ -5,12 +5,18 @@ import {
   LabelPresetSchema,
   LabelPropsSchema,
   PreviewPropsSchema,
+  PrintCountMapSchema,
+  PrintHistoryEntrySchema,
+  RecentLabelEntrySchema,
   type AutomationProps,
   type ConnectionType,
   type ExportedLabelTemplate,
   type LabelPreset,
   type LabelProps,
   type PreviewProps,
+  type PrintCountMap,
+  type PrintHistoryEntry,
+  type RecentLabelEntry,
 } from "$/types";
 import { z } from "zod";
 import { FileUtils } from "$/utils/file_utils";
@@ -332,5 +338,38 @@ export class LocalStoragePersistence {
    */
   static loadCachedFonts(): string[] {
     return this.loadAndValidateObject("font_cache", z.array(z.string())) ?? [];
+  }
+
+  static loadPrintHistory(): PrintHistoryEntry[] {
+    return this.loadAndValidateObject("print_history", z.array(PrintHistoryEntrySchema)) ?? [];
+  }
+
+  static savePrintHistory(entries: PrintHistoryEntry[]) {
+    this.validateAndSaveObject("print_history", entries.slice(0, 50), z.array(PrintHistoryEntrySchema));
+  }
+
+  static addPrintHistory(entry: PrintHistoryEntry) {
+    const next = [entry, ...this.loadPrintHistory().filter((item) => item.id !== entry.id)];
+    this.savePrintHistory(next);
+  }
+
+  static loadRecentLabels(): RecentLabelEntry[] {
+    return this.loadAndValidateObject("recent_labels", z.array(RecentLabelEntrySchema)) ?? [];
+  }
+
+  static touchRecentLabel(id: string) {
+    const next = [{ id, openedAt: FileUtils.timestamp() }, ...this.loadRecentLabels().filter((item) => item.id !== id)];
+    this.validateAndSaveObject("recent_labels", next.slice(0, 30), z.array(RecentLabelEntrySchema));
+  }
+
+  static loadPrintCounts(): PrintCountMap {
+    return this.loadAndValidateObject("print_counts", PrintCountMapSchema) ?? {};
+  }
+
+  static incrementPrintCount(id: string, by = 1): number {
+    const counts = this.loadPrintCounts();
+    counts[id] = (counts[id] ?? 0) + by;
+    this.validateAndSaveObject("print_counts", counts, PrintCountMapSchema);
+    return counts[id];
   }
 }

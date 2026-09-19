@@ -44,11 +44,11 @@
   };
 </script>
 
-<div bind:this={modalEl} class="modal fade" tabindex="-1" aria-hidden="true">
+<div bind:this={modalEl} class="modal fade workspace-modal" data-bs-theme="light" tabindex="-1" aria-hidden="true">
   <div class="modal-dialog modal-dialog-centered">
     <div class="modal-content">
       <div class="modal-header">
-        <h1 class="modal-title fs-5">{title}</h1>
+        <h1 class="modal-title">{title}</h1>
         <button aria-label="Dismiss" type="button" class="btn-close" data-bs-dismiss="modal"></button>
       </div>
 

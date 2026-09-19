@@ -12,9 +12,10 @@
     editRevision?: number;
     value: string;
     valueUpdated: (v: string) => void;
+    variant?: "default" | "inspector";
   }
 
-  let { value, valueUpdated, editRevision }: Props = $props();
+  let { value, valueUpdated, editRevision, variant = "default" }: Props = $props();
 
   let fontQuerySupported = typeof queryLocalFonts !== "undefined";
   let searchString = $state<string>("");
@@ -56,7 +57,7 @@
   });
 </script>
 
-<div class="input-group flex-nowrap input-group-sm font-family-picker">
+<div class="input-group flex-nowrap input-group-sm font-family-picker" class:insp-font={variant === "inspector"}>
   <span class="input-group-text" title={$tr("params.text.font_family")}>
     <MdIcon icon="text_format" />
   </span>
@@ -107,7 +108,9 @@
     {/if}
   </div>
 
-  <FontsMenu />
+  {#if variant !== "inspector"}
+    <FontsMenu />
+  {/if}
 </div>
 
 <style>

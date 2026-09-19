@@ -2,10 +2,6 @@
   import Dropdown from "bootstrap/js/dist/dropdown";
   import * as fabric from "fabric";
   import { onDestroy, onMount, tick } from "svelte";
-  import { ArUcoMarker } from "$/fabric-object/aruco";
-  import { Barcode } from "$/fabric-object/barcode";
-  import { QRCode } from "$/fabric-object/qrcode";
-  import { iconCodepoints, type MaterialIcon } from "$/styles/mdi_icons";
   import { appConfig, automation, connectionState, csvData, loadedFonts } from "$/stores";
   import {
     type ExportedLabelTemplate,
@@ -20,26 +16,31 @@
   import { LocalStoragePersistence } from "$/utils/persistence";
   import { Toasts } from "$/utils/toasts";
   import { UndoRedo, type UndoState } from "$/utils/undo_redo";
-  import BarcodeParamsPanel from "$/components/designer-controls/BarcodeParamsControls.svelte";
-  import CsvControl from "$/components/designer-controls/CsvControl.svelte";
-  import GenericObjectParamsControls from "$/components/designer-controls/GenericObjectParamsControls.svelte";
-  import IconPicker from "$/components/designer-controls/IconPicker.svelte";
-  import LabelPropsEditor from "$/components/designer-controls/LabelPropsEditor.svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
-  import ObjectPicker from "$/components/designer-controls/ObjectPicker.svelte";
   import PrintPreview from "$/components/PrintPreview.svelte";
-  import ArUcoParamsPanel from "$/components/designer-controls/ArUcoParamsControls.svelte";
-  import QrCodeParamsPanel from "$/components/designer-controls/QRCodeParamsControls.svelte";
-  import TextParamsControls from "$/components/designer-controls/TextParamsControls.svelte";
-  import VariableInsertControl from "$/components/designer-controls/VariableInsertControl.svelte";
   import { DEFAULT_LABEL_PROPS, GRID_SIZE, OBJECT_DEFAULTS } from "$/defaults";
   import { LabelDesignerUtils } from "$/utils/label_designer_utils";
   import SavedLabelsMenu from "$/components/designer-controls/SavedLabelsMenu.svelte";
   import { CustomCanvas } from "$/fabric-object/custom_canvas";
-  import VectorParamsControls from "$/components/designer-controls/VectorParamsControls.svelte";
   import { CanvasUtils } from "$/utils/canvas_utils";
+  import ElementPalette from "$/components/workspace/ElementPalette.svelte";
+  import InspectorPanel from "$/components/workspace/InspectorPanel.svelte";
+  import LabelSettingsPanel from "$/components/workspace/LabelSettingsPanel.svelte";
+  import ObjectSettingsPanel from "$/components/workspace/ObjectSettingsPanel.svelte";
+  import CanvasRulers from "$/components/workspace/CanvasRulers.svelte";
+  import { DEFAULT_DPMM, rotateLabelProps } from "$/utils/label_geometry";
+
+  interface Props {
+    autoLoad?: boolean;
+    onSaved?: () => void;
+    onUrlLoaded?: (label: ExportedLabelTemplate) => void;
+  }
+
+  let { autoLoad = true, onSaved, onUrlLoaded }: Props = $props();
 
   let htmlCanvas: HTMLCanvasElement;
+  let canvasStage: HTMLDivElement | undefined = $state();
+  let canvasHost: HTMLDivElement | undefined = $state();
 
   let fabricCanvas = $state<CustomCanvas>();
   let labelProps = $state<LabelProps>(DEFAULT_LABEL_PROPS);
@@ -51,7 +52,14 @@
   let csvEnabled = $state<boolean>(false);
   let windowWidth = $state<number>(0);
   let undoState = $state<UndoState>({ undoDisabled: false, redoDisabled: false });
-  let zoomText = $state<string>("100%");
+  let zoomRatio = $state(1);
+  let zoomInput = $state("100");
+  let zoomFocused = $state(false);
+  let rulerRevision = $state(0);
+  let labelTitle = $state<string>("");
+  let savedId = $state<string | undefined>(undefined);
+  let pendingLabel = $state<ExportedLabelTemplate | undefined>(undefined);
+  let pendingCsvEnabled = $state<boolean | undefined>(undefined);
 
   const undo = new UndoRedo();
 
@@ -154,6 +162,7 @@
     labelProps = newProps;
     fabricCanvas!.setDimensions(labelProps.size);
     fabricCanvas!.virtualZoom(fabricCanvas!.getVirtualZoom());
+    rulerRevision++;
     try {
       LocalStoragePersistence.saveLastLabelProps(labelProps);
       undo.push(fabricCanvas!, labelProps);
@@ -163,8 +172,34 @@
   };
 
   const exportCurrentLabel = (): ExportedLabelTemplate => {
-    return FileUtils.makeExportedLabel(fabricCanvas!, labelProps, csvEnabled);
+    const label = FileUtils.makeExportedLabel(fabricCanvas!, labelProps, csvEnabled);
+    label.title = labelTitle || label.title;
+    if (savedId) {
+      label.id = savedId;
+    }
+    return label;
   };
+
+  export function getSnapshot(): ExportedLabelTemplate {
+    return exportCurrentLabel();
+  }
+
+  export function getCsvEnabled(): boolean {
+    return csvEnabled;
+  }
+
+  export async function applyLabel(data: ExportedLabelTemplate, enableCsv?: boolean) {
+    if (!fabricCanvas) {
+      pendingLabel = data;
+      pendingCsvEnabled = enableCsv;
+      return;
+    }
+    labelTitle = data.title ?? "";
+    savedId = data.id?.startsWith("saved_label") ? data.id : undefined;
+    csvEnabled = enableCsv ?? !!data.csv;
+    await loadLabelData(data);
+    undo.push(fabricCanvas!, labelProps);
+  }
 
   const onLoadRequested = (label: ExportedLabelTemplate) => {
     loadLabelData(label).then(() => undo.push(fabricCanvas!, labelProps));
@@ -193,15 +228,6 @@
       fabricCanvas!.setActiveObject(obj);
       undo.push(fabricCanvas!, labelProps);
     }
-  };
-
-  const onIconPicked = (i: MaterialIcon) => {
-    // todo: icon is not vertically centered
-    LabelDesignerObjectHelper.addStaticText(fabricCanvas!, String.fromCodePoint(iconCodepoints[i]), {
-      fontFamily: "Material Icons",
-      fontSize: 100,
-    });
-    undo.push(fabricCanvas!, labelProps);
   };
 
   const onSvgIconPicked = (i: string) => {
@@ -285,7 +311,11 @@
       const urlTemplate = await FileUtils.readLabelFromUrl();
 
       if (urlTemplate !== null && confirm($tr("params.saved_labels.load.url.warn"))) {
-        onLoadRequested(urlTemplate);
+        if (onUrlLoaded) {
+          onUrlLoaded(urlTemplate);
+        } else {
+          onLoadRequested(urlTemplate);
+        }
         Toasts.message($tr("params.saved_labels.load.url.loaded"));
         return true;
       }
@@ -302,6 +332,10 @@
       return;
     }
 
+    if (!autoLoad) {
+      return;
+    }
+
     try {
       const defaultTemplate = LocalStoragePersistence.loadDefaultTemplate();
 
@@ -314,6 +348,45 @@
     }
 
     LabelDesignerObjectHelper.addText(fabricCanvas!, $tr("editor.default_text"));
+  };
+
+  const saveCurrentLabel = () => {
+    const label = exportCurrentLabel();
+    label.title = labelTitle.trim() || $tr("editor.untitled");
+    const saved = LocalStoragePersistence.loadLabels();
+    const index = saved.findIndex((item) => item.id === savedId);
+    if (index >= 0) {
+      saved[index] = label;
+    } else {
+      saved.push(label);
+    }
+    const { zodErrors, otherErrors } = LocalStoragePersistence.saveLabels(saved);
+    zodErrors.forEach((e) => Toasts.zodErrors(e, "Label save error"));
+    otherErrors.forEach((e) => Toasts.error(e));
+    if (zodErrors.length === 0 && otherErrors.length === 0) {
+      const reloaded = LocalStoragePersistence.loadLabels();
+      const match =
+        reloaded.find((item) => item.title === label.title && item.timestamp === label.timestamp) ??
+        reloaded[reloaded.length - 1];
+      savedId = match?.id;
+      labelTitle = label.title;
+      Toasts.message($tr("editor.save.done"));
+      onSaved?.();
+    }
+  };
+
+  const rotatePaper = () => {
+    onUpdateLabelProps(rotateLabelProps(labelProps));
+  };
+
+  const applyTypedZoom = () => {
+    const parsed = Number.parseFloat(zoomInput.replace("%", "").trim());
+    if (!Number.isFinite(parsed)) {
+      zoomInput = String(Math.round(zoomRatio * 100));
+      return;
+    }
+    fabricCanvas?.virtualZoom(parsed / 100);
+    zoomInput = String(Math.round((fabricCanvas?.getVirtualZoom() ?? parsed / 100) * 100));
   };
 
   const renderOnFontsChanged = () => {
@@ -341,15 +414,28 @@
     });
     fabricCanvas.setLabelProps(labelProps);
     fabricCanvas.onZoomChange = (z) => {
-      zoomText = Math.round(z * 100) + "%";
+      zoomRatio = z;
+      if (!zoomFocused) {
+        zoomInput = String(Math.round(z * 100));
+      }
+      rulerRevision++;
     };
     fabricCanvas.setGridEnabled(!!$appConfig.gridEnabled);
 
-    await loadDefaultLabel();
+    if (pendingLabel) {
+      const queued = pendingLabel;
+      const queuedCsv = pendingCsvEnabled;
+      pendingLabel = undefined;
+      pendingCsvEnabled = undefined;
+      await applyLabel(queued, queuedCsv);
+    } else {
+      await loadDefaultLabel();
+    }
 
     window.addEventListener("hashchange", loadLabelFromUrl);
 
     undo.push(fabricCanvas, labelProps);
+    rulerRevision++;
 
     // force close dropdowns on touch devices
     fabricCanvas.on("mouse:down", (): void => {
@@ -458,6 +544,10 @@
   });
 
   $effect(() => {
+    fabricCanvas?.setGridEnabled(!!$appConfig.gridEnabled);
+  });
+
+  $effect(() => {
     if (!previewOpened) {
       printNow = false;
     }
@@ -472,123 +562,112 @@
 
 <svelte:window bind:innerWidth={windowWidth} onkeydown={onKeyDown} onpaste={onPaste} />
 
-<div class="image-editor">
-  <div class="row mb-3">
-    <div class="col d-flex justify-content-center">
-      <div class="canvas-wrapper print-start-{labelProps.printDirection}">
-        <canvas bind:this={htmlCanvas}></canvas>
-      </div>
-    </div>
+<div class="image-editor designer-root">
+  <div class="workspace-toolbar">
+    <button class="ws-btn ws-btn-ghost" disabled={undoState.undoDisabled} onclick={() => undo.undo()}>
+      <MdIcon icon="undo" />
+      {$tr("editor.recover")}
+    </button>
+    <button class="ws-btn ws-btn-ghost" disabled={undoState.redoDisabled} onclick={() => undo.redo()} title={$tr("editor.redo")}>
+      <MdIcon icon="redo" />
+    </button>
+    <button class="ws-btn ws-btn-ghost" onclick={clearCanvas} title={$tr("editor.clear")}>
+      <MdIcon icon="cancel_presentation" />
+    </button>
+    <SavedLabelsMenu canvas={fabricCanvas!} onRequestLabelTemplate={exportCurrentLabel} {onLoadRequested} {csvEnabled} />
+    <div class="workspace-toolbar__spacer"></div>
+    <button class="ws-btn" onclick={openPreview}>
+      <MdIcon icon="visibility" />
+      {$tr("editor.preview")}
+    </button>
+    <button class="ws-btn" onclick={saveCurrentLabel}>
+      <MdIcon icon="save" />
+      {$tr("editor.save")}
+    </button>
+    <button class="ws-btn ws-btn-primary" onclick={openPreviewAndPrint} disabled={$connectionState !== "connected"}>
+      <MdIcon icon="print" />
+      {$tr("editor.print")}
+    </button>
   </div>
 
-  <div class="row mb-1">
-    <div class="col d-flex justify-content-center">
-      <div class="toolbar d-flex flex-wrap gap-1 justify-content-center align-items-center">
-        <LabelPropsEditor {labelProps} onChange={onUpdateLabelProps} />
+  <div class="designer-workspace">
+    <ElementPalette
+      {labelProps}
+      bind:csvEnabled
+      onPick={onObjectPicked}
+      {onSvgIconPicked}
+      {onCsvPlaceholderPicked}
+      {zplImageReady}
+      {pdfImageReady} />
 
-        <button class="btn btn-sm btn-secondary" onclick={clearCanvas} title={$tr("editor.clear")}>
-          <MdIcon icon="cancel_presentation" />
+    <div class="designer-canvas-pane">
+      <div class="designer-canvas-stage" bind:this={canvasStage}>
+        <CanvasRulers
+          container={canvasStage}
+          target={canvasHost}
+          dpmm={DEFAULT_DPMM}
+          zoom={zoomRatio}
+          printDirection={labelProps.printDirection}
+          revision={rulerRevision} />
+        <div class="canvas-wrapper print-start-{labelProps.printDirection}" bind:this={canvasHost}>
+          <canvas bind:this={htmlCanvas}></canvas>
+        </div>
+      </div>
+      <div class="designer-canvas-footer">
+        <div class="zoom-control">
+          <button
+            type="button"
+            title={$tr("editor.zoom.out")}
+            disabled={zoomRatio <= 0.25}
+            onclick={() => fabricCanvas?.virtualZoomOut()}>
+            <MdIcon icon="zoom_out" />
+          </button>
+          <input
+            type="text"
+            inputmode="decimal"
+            aria-label={$tr("editor.zoom")}
+            value={zoomInput}
+            onfocus={() => (zoomFocused = true)}
+            oninput={(e) => (zoomInput = e.currentTarget.value)}
+            onblur={() => {
+              zoomFocused = false;
+              applyTypedZoom();
+            }}
+            onkeydown={(e) => {
+              if (e.key === "Enter") {
+                e.currentTarget.blur();
+              }
+            }} />
+          <span class="zoom-control__suffix">%</span>
+          <button
+            type="button"
+            title={$tr("editor.zoom.in")}
+            disabled={zoomRatio >= 4}
+            onclick={() => fabricCanvas?.virtualZoomIn()}>
+            <MdIcon icon="zoom_in" />
+          </button>
+        </div>
+        <button class="ws-btn" onclick={rotatePaper}>
+          <MdIcon icon="rotate_right" />
+          {$tr("editor.rotate")}
         </button>
-
-        <SavedLabelsMenu
-          canvas={fabricCanvas!}
-          onRequestLabelTemplate={exportCurrentLabel}
-          {onLoadRequested}
-          {csvEnabled} />
-
-        <button
-          class="btn btn-sm btn-secondary"
-          disabled={undoState.undoDisabled}
-          onclick={() => undo.undo()}
-          title={$tr("editor.undo")}>
-          <MdIcon icon="undo" />
-        </button>
-
-        <button
-          class="btn btn-sm btn-secondary"
-          disabled={undoState.redoDisabled}
-          onclick={() => undo.redo()}
-          title={$tr("editor.redo")}>
-          <MdIcon icon="redo" />
-        </button>
-
-        <button
-          class="btn btn-sm {$appConfig.gridEnabled ? 'btn-primary' : 'btn-secondary'}"
-          onclick={toggleGrid}
-          title={$tr("editor.grid")}>
-          <MdIcon icon="grid_on" />
-        </button>
-
-        <button
-          class="btn btn-sm btn-secondary"
-          onclick={() => fabricCanvas?.resetVirtualZoom()}
-          title="Reset zoom">
-          {zoomText}
-        </button>
-
-        <CsvControl bind:enabled={csvEnabled} onPlaceholderPicked={onCsvPlaceholderPicked} />
-
-        <IconPicker onSubmit={onIconPicked} onSubmitSvg={onSvgIconPicked} />
-
-        <ObjectPicker onSubmit={onObjectPicked} {labelProps} {zplImageReady} {pdfImageReady}  />
-
-        <button class="btn btn-sm btn-primary ms-1" onclick={openPreview}>
-          <MdIcon icon="visibility" />
-          {$tr("editor.preview")}
-        </button>
-        <button
-          title="Print with default or saved parameters"
-          class="btn btn-sm btn-primary ms-1"
-          onclick={openPreviewAndPrint}
-          disabled={$connectionState !== "connected"}><MdIcon icon="print" /> {$tr("editor.print")}</button>
       </div>
     </div>
-  </div>
 
-  <div class="row mb-1">
-    <div class="col d-flex justify-content-center">
-      <div class="toolbar d-flex flex-wrap gap-1 justify-content-center align-items-center">
-        {#if selectedCount > 0}
-          <button class="btn btn-sm btn-danger me-1" onclick={deleteSelected} title={$tr("editor.delete")}>
-            <MdIcon icon="delete" />
-          </button>
-        {/if}
-
-        {#if selectedCount > 0}
-          <button class="btn btn-sm btn-secondary me-1" onclick={cloneSelected} title={$tr("editor.clone")}>
-            <MdIcon icon="content_copy" />
-          </button>
-        {/if}
-
-        {#if selectedObject && selectedCount === 1}
-          <GenericObjectParamsControls {selectedObject} {editRevision} valueUpdated={controlValueUpdated} />
-        {/if}
-
-        {#if selectedObject}
-          <VectorParamsControls {selectedObject} {editRevision} valueUpdated={controlValueUpdated} />
-        {/if}
-
-        {#if selectedObject instanceof fabric.IText}
-          <TextParamsControls selectedText={selectedObject} {editRevision} valueUpdated={controlValueUpdated} />
-        {/if}
-
-        {#if selectedObject instanceof QRCode}
-          <QrCodeParamsPanel selectedQRCode={selectedObject} {editRevision} valueUpdated={controlValueUpdated} />
-        {/if}
-
-        {#if selectedObject instanceof ArUcoMarker}
-          <ArUcoParamsPanel selectedArUco={selectedObject} {editRevision} valueUpdated={controlValueUpdated} />
-        {/if}
-
-        {#if selectedObject instanceof Barcode}
-          <BarcodeParamsPanel selectedBarcode={selectedObject} {editRevision} valueUpdated={controlValueUpdated} />
-        {/if}
-
-        {#if selectedObject instanceof fabric.IText || selectedObject instanceof QRCode || (selectedObject instanceof Barcode && selectedObject.encoding === "CODE128B")}
-          <VariableInsertControl {selectedObject} valueUpdated={controlValueUpdated} />
-        {/if}
-      </div>
-    </div>
+    <InspectorPanel {selectedCount}>
+      {#snippet label()}
+        <LabelSettingsPanel {labelProps} bind:title={labelTitle} onChange={onUpdateLabelProps} onTitleChange={(value) => (labelTitle = value)} />
+      {/snippet}
+      {#snippet object()}
+        <ObjectSettingsPanel
+          {selectedObject}
+          {selectedCount}
+          {editRevision}
+          onDelete={deleteSelected}
+          onClone={cloneSelected}
+          onValueUpdated={controlValueUpdated} />
+      {/snippet}
+    </InspectorPanel>
   </div>
 
   {#if previewOpened}
@@ -598,16 +677,26 @@
       {labelProps}
       {printNow}
       {csvEnabled}
-      csvData={$csvData.data} />
+      csvData={$csvData.data}
+      labelTitle={labelTitle}
+      sourceId={savedId} />
   {/if}
 </div>
 
 <style>
+  .designer-root {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    min-height: 0;
+    flex: 1;
+  }
+
   .canvas-wrapper {
-    border: 1px solid rgba(0, 0, 0, 0.4);
-    background-color: rgba(60, 55, 63, 0.5);
+    border: 0;
+    background-color: transparent;
     max-width: 100%;
-    max-height: 70vh;
+    max-height: 100%;
     overflow: auto;
   }
   .canvas-wrapper.print-start-left {

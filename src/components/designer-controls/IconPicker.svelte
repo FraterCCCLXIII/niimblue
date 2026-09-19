@@ -1,27 +1,34 @@
 <script lang="ts">
   import { onDestroy, onMount } from "svelte";
   import { tr } from "$/utils/i18n";
-  import { iconCodepoints, type MaterialIcon } from "$/styles/mdi_icons";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import { appConfig, userIcons } from "$/stores";
   import { FileUtils } from "$/utils/file_utils";
   import { Toasts } from "$/utils/toasts";
+  import { getLucidePackNames, lucideIconToSvg, lucideSearchKey } from "$/utils/lucide_icons";
 
   interface Props {
-    onSubmit: (i: MaterialIcon) => void;
     onSubmitSvg: (i: string) => void;
   }
 
-  let { onSubmit, onSubmitSvg }: Props = $props();
+  let { onSubmitSvg }: Props = $props();
 
-  let iconNames = $state<MaterialIcon[]>([]);
+  let iconNames = $state<string[]>([]);
   let search = $state<string>("");
   let deleteMode = $state<boolean>(false);
   let dropdown: HTMLDivElement;
 
+  const visiblePackIcons = $derived.by(() => {
+    const query = search.trim().toLowerCase();
+    const filtered = query
+      ? iconNames.filter((name) => lucideSearchKey(name).includes(query) || name.toLowerCase().includes(query))
+      : iconNames;
+    return filtered.slice(0, 240);
+  });
+
   const onShow = () => {
     if (iconNames.length === 0) {
-      iconNames = Object.keys(iconCodepoints) as MaterialIcon[];
+      iconNames = getLucidePackNames();
     }
   };
 
@@ -49,12 +56,12 @@
     onSubmitSvg(data);
   };
 
-  const iconClicked = (i: MaterialIcon) => {
+  const packClicked = (name: string) => {
     if (deleteMode) {
       return;
     }
 
-    onSubmit(i);
+    onSubmitSvg(lucideIconToSvg(name, "#000000"));
   };
 
   onMount(() => {
@@ -103,12 +110,10 @@
         {/if}
 
         {#if $appConfig.iconListMode === "both" || $appConfig.iconListMode === "pack"}
-          {#each iconNames as name (name)}
-            {#if !search || name.includes(search.toLowerCase())}
-              <button class="btn me-1" title={name} onclick={() => iconClicked(name)}>
-                <MdIcon icon={name} />
-              </button>
-            {/if}
+          {#each visiblePackIcons as name (name)}
+            <button class="btn me-1 pack-icon" title={lucideSearchKey(name)} onclick={() => packClicked(name)}>
+              {@html lucideIconToSvg(name)}
+            </button>
           {/each}
         {/if}
       </div>
@@ -127,10 +132,7 @@
         </button>
       </div>
 
-      <a
-        href="https://fonts.google.com/icons?icon.set=Material+Icons&icon.style=Filled"
-        target="_blank"
-        class="text-secondary">
+      <a href="https://lucide.dev/icons/" target="_blank" class="text-secondary">
         {$tr("editor.iconpicker.mdi_link_title")}
       </a>
     </div>
@@ -146,7 +148,10 @@
     max-height: 400px;
     overflow-y: scroll;
   }
-  .user-icon img {
+  .user-icon img,
+  .pack-icon :global(svg) {
     width: 24px;
+    height: 24px;
+    display: block;
   }
 </style>

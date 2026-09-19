@@ -1,6 +1,5 @@
 <script lang="ts">
   import { ArUcoMarker, type ArUcoDictionary } from "$/fabric-object/aruco";
-  import MdIcon from "$/components/basic/MdIcon.svelte";
   import { tr } from "$/utils/i18n";
 
   interface Props {
@@ -20,14 +19,12 @@
   let maxId = $derived(dictOptions.find((d) => d.value === selectedArUco.dictionary)?.max ?? 49);
 </script>
 
-<input type="hidden" value={editRevision}>
+<input type="hidden" value={editRevision} />
 
-<div class="input-group input-group-sm flex-nowrap">
-  <span class="input-group-text" title={$tr("params.aruco.dict")}>
-    <MdIcon icon="grid_on" />
-  </span>
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.aruco.dict")}</span>
   <select
-    class="form-select"
+    class="insp-field insp-select insp-field-narrow"
     value={selectedArUco.dictionary}
     onchange={(e) => {
       selectedArUco?.set("dictionary", e.currentTarget.value);
@@ -43,13 +40,11 @@
   </select>
 </div>
 
-<div class="input-group input-group-sm flex-nowrap">
-  <span class="input-group-text" title={$tr("params.aruco.marker_id")}>
-    <MdIcon icon="tag" />
-  </span>
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.aruco.marker_id")}</span>
   <input
     type="number"
-    class="form-control"
+    class="insp-field insp-field-narrow"
     min="0"
     max={maxId}
     value={selectedArUco.markerId}
@@ -63,7 +58,7 @@
 </div>
 
 <style>
-  .input-group {
-    width: fit-content;
+  .insp-field-narrow {
+    width: 132px;
   }
 </style>

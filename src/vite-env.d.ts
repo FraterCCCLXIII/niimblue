@@ -1,5 +1,10 @@
 /// <reference types="svelte" />
 /// <reference types="vite/client" />
+
+interface Window {
+  niimblueDesktop?: import("$/utils/desktop").DesktopApi;
+}
+
 declare const __APP_VERSION__: string;
 declare const __APP_COMMIT__: string;
 declare const __BUILD_DATE__: string;

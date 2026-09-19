@@ -185,6 +185,20 @@ export class LabelDesignerObjectHelper {
         return this.addArUco(canvas);
       case "barcode":
         return this.addBarcode(canvas);
+      case "time":
+        return this.addText(canvas, "{dt|YYYY-MM-DD HH:mm}", {
+          fontSize: 16,
+          textAlign: "left",
+          originX: "left",
+          originY: "top",
+        });
+      case "sn":
+        return this.addText(canvas, "SN-0001", {
+          fontSize: 16,
+          textAlign: "left",
+          originX: "left",
+          originY: "top",
+        });
     }
   }
 }

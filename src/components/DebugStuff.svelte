@@ -8,30 +8,36 @@
 </script>
 
 <AppModal title={$tr("debug.title")} bind:show>
-  <div class="mb-1">
-    {$tr("debug.packet_interval.help")}
-  </div>
+  <section class="debug-block">
+    <p class="ws-help">{$tr("debug.packet_interval.help")}</p>
+    <div class="ws-field-row">
+      <input
+        class="insp-field"
+        type="number"
+        min="1"
+        placeholder={`${NIIMBOT_CLIENT_DEFAULTS.packetIntervalMs}`}
+        bind:value={$appConfig.packetIntervalMs} />
+      <span class="ws-suffix">ms</span>
+      <button type="button" class="ws-btn" onclick={() => ($appConfig.packetIntervalMs = undefined)}>
+        {$tr("debug.reset")}
+      </button>
+    </div>
+  </section>
 
-  <div class="input-group flex-nowrap input-group-sm mb-3">
-    <input
-      class="form-control"
-      type="number"
-      min="1"
-      placeholder={`${NIIMBOT_CLIENT_DEFAULTS.packetIntervalMs}`}
-      bind:value={$appConfig.packetIntervalMs} />
-    <span class="input-group-text">ms</span>
-    <button class="btn btn-outline-secondary" onclick={() => ($appConfig.packetIntervalMs = undefined)}
-      >{$tr("debug.reset")}</button>
-  </div>
-
-  <div class="mb-1">
-    {$tr("debug.page_delay.help")}
-  </div>
-
-  <div class="input-group flex-nowrap input-group-sm mb-3" role="group">
-    <input class="form-control" type="number" min="0" placeholder="0" bind:value={$appConfig.pageDelay} />
-    <span class="input-group-text">ms</span>
-    <button class="btn btn-outline-secondary" onclick={() => ($appConfig.pageDelay = undefined)}
-      >{$tr("debug.reset")}</button>
-  </div>
+  <section class="debug-block">
+    <p class="ws-help">{$tr("debug.page_delay.help")}</p>
+    <div class="ws-field-row">
+      <input class="insp-field" type="number" min="0" placeholder="0" bind:value={$appConfig.pageDelay} />
+      <span class="ws-suffix">ms</span>
+      <button type="button" class="ws-btn" onclick={() => ($appConfig.pageDelay = undefined)}>
+        {$tr("debug.reset")}
+      </button>
+    </div>
+  </section>
 </AppModal>
+
+<style>
+  .debug-block + .debug-block {
+    margin-top: 20px;
+  }
+</style>

@@ -1,0 +1,5 @@
+node_modules
+www
+release
+*.log
+.DS_Store

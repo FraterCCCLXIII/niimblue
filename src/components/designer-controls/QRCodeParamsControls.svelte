@@ -1,7 +1,6 @@
 <script lang="ts">
   import { QRCode } from "$/fabric-object/qrcode";
   import { tr } from "$/utils/i18n";
-  import MdIcon from "$/components/basic/MdIcon.svelte";
 
   interface Props {
     selectedQRCode: QRCode;
@@ -12,14 +11,23 @@
   let { selectedQRCode, editRevision, valueUpdated }: Props = $props();
 </script>
 
-<input type="hidden" value={editRevision}>
+<input type="hidden" value={editRevision} />
 
-<div class="input-group input-group-sm flex-nowrap">
-  <span class="input-group-text" title={$tr("params.qrcode.ecl")}>
-    <MdIcon icon="auto_fix_high" />
-  </span>
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("params.text.content")}</h3>
+  <textarea
+    class="insp-field insp-textarea"
+    value={selectedQRCode.text}
+    oninput={(e) => {
+      selectedQRCode?.set("text", e.currentTarget.value);
+      valueUpdated();
+    }}></textarea>
+</section>
+
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.qrcode.ecl")}</span>
   <select
-    class="form-select"
+    class="insp-field insp-select insp-field-narrow"
     value={selectedQRCode.ecl}
     onchange={(e) => {
       selectedQRCode?.set("ecl", e.currentTarget.value);
@@ -32,12 +40,10 @@
   </select>
 </div>
 
-<div class="input-group input-group-sm flex-nowrap">
-  <span class="input-group-text" title={$tr("params.qrcode.mode")}>
-    <MdIcon icon="abc" />
-  </span>
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.qrcode.mode")}</span>
   <select
-    class="form-select"
+    class="insp-field insp-select insp-field-narrow"
     value={selectedQRCode.mode}
     onchange={(e) => {
       selectedQRCode?.set("mode", e.currentTarget.value);
@@ -50,12 +56,10 @@
   </select>
 </div>
 
-<div class="input-group input-group-sm flex-nowrap">
-  <span class="input-group-text" title={$tr("params.qrcode.version")}>
-    <MdIcon icon="123" />
-  </span>
+<div class="insp-row">
+  <span class="insp-row__label">{$tr("params.qrcode.version")}</span>
   <select
-    class="form-select"
+    class="insp-field insp-select insp-field-narrow"
     value={selectedQRCode.qrVersion}
     onchange={(e) => {
       selectedQRCode?.set("qrVersion", parseInt(e.currentTarget.value));
@@ -68,20 +72,8 @@
   </select>
 </div>
 
-<textarea
-  class="qrcode-content form-control"
-  value={selectedQRCode.text}
-  oninput={(e) => {
-    selectedQRCode?.set("text", e.currentTarget.value);
-    valueUpdated();
-  }}></textarea>
-
 <style>
-  .input-group {
-    width: fit-content;
-  }
-
-  .qrcode-content {
-    height: 100px;
+  .insp-field-narrow {
+    width: 132px;
   }
 </style>

@@ -32,9 +32,20 @@
     csvData: string;
     csvEnabled: boolean;
     show: boolean;
+    labelTitle?: string;
+    sourceId?: string;
   }
 
-  let { labelProps, canvasCallback, printNow = false, csvData, csvEnabled, show = $bindable() }: Props = $props();
+  let {
+    labelProps,
+    canvasCallback,
+    printNow = false,
+    csvData,
+    csvEnabled,
+    show = $bindable(),
+    labelTitle = "",
+    sourceId,
+  }: Props = $props();
 
   let previewCanvas: HTMLCanvasElement;
   let printState = $state<"idle" | "sending" | "printing">("idle");
@@ -167,6 +178,26 @@
 
     printState = "idle";
     $printerClient.startHeartbeat();
+
+    if (!error) {
+      try {
+        LocalStoragePersistence.addPrintHistory({
+          id: `print_${FileUtils.timestamp()}_${Math.random().toString(36).slice(2, 7)}`,
+          title: labelTitle || "Untitled",
+          timestamp: FileUtils.timestamp(),
+          copies: quantity * Math.max(pagesTotal, 1),
+          pages: pagesTotal,
+          thumbnailBase64: previewCanvas?.toDataURL("image/jpeg", 0.7),
+          sourceId,
+          size: labelProps.size,
+        });
+        if (sourceId) {
+          LocalStoragePersistence.incrementPrintCount(sourceId, quantity * Math.max(pagesTotal, 1));
+        }
+      } catch (e) {
+        console.error(e);
+      }
+    }
 
     if (printNow && !error) {
       modalRef.hide();

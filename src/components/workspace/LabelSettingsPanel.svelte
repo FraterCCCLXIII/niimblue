@@ -1,0 +1,181 @@
+<script lang="ts">
+  import type { LabelProps, LabelShape } from "$/types";
+  import { DEFAULT_LABEL_PRESETS } from "$/defaults";
+  import { applyLabelDimensions, DEFAULT_DPMM, formatPresetSize, labelSizeMm } from "$/utils/label_geometry";
+  import { LocalStoragePersistence } from "$/utils/persistence";
+  import { appConfig } from "$/stores";
+  import { tr } from "$/utils/i18n";
+  import LabelPropsEditor from "$/components/designer-controls/LabelPropsEditor.svelte";
+  import type { PrintDirection } from "@mmote/niimbluelib";
+
+  interface Props {
+    labelProps: LabelProps;
+    title: string;
+    onChange: (next: LabelProps) => void;
+    onTitleChange: (title: string) => void;
+  }
+
+  let { labelProps, title = $bindable(), onChange, onTitleChange }: Props = $props();
+
+  let dpmm = $state(DEFAULT_DPMM);
+  let presets = $state(DEFAULT_LABEL_PRESETS);
+  let widthMm = $state(40);
+  let heightMm = $state(20);
+
+  const syncFromProps = () => {
+    const size = labelSizeMm(labelProps, dpmm);
+    widthMm = size.width;
+    heightMm = size.height;
+    presets = LocalStoragePersistence.loadLabelPresets() ?? DEFAULT_LABEL_PRESETS;
+  };
+
+  $effect(() => {
+    void labelProps.size.width;
+    void labelProps.size.height;
+    syncFromProps();
+  });
+
+  const applySize = (width = widthMm, height = heightMm) => {
+    onChange(
+      applyLabelDimensions({
+        width,
+        height,
+        unit: "mm",
+        dpmm,
+        printDirection: labelProps.printDirection,
+        shape: labelProps.shape,
+        split: labelProps.split,
+        splitParts: labelProps.splitParts,
+        tailPos: labelProps.tailPos,
+        tailLength: labelProps.tailLength,
+        mirror: labelProps.mirror,
+      }),
+    );
+  };
+
+  const applyPreset = (index: number) => {
+    const preset = presets[index];
+    if (!preset) {
+      return;
+    }
+    dpmm = preset.dpmm;
+    onChange(
+      applyLabelDimensions({
+        width: preset.width,
+        height: preset.height,
+        unit: preset.unit,
+        dpmm: preset.dpmm,
+        printDirection: preset.printDirection,
+        shape: preset.shape,
+        split: preset.split,
+        splitParts: preset.splitParts,
+        tailPos: preset.tailPos,
+        tailLength: preset.tailLength,
+        mirror: preset.mirror,
+      }),
+    );
+  };
+
+  const toggleGrid = () => {
+    appConfig.update((cfg) => ({ ...cfg, gridEnabled: !cfg.gridEnabled }));
+  };
+</script>
+
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("editor.label_settings.title")}</h3>
+  <input
+    id="label-title"
+    class="insp-field"
+    type="text"
+    bind:value={title}
+    oninput={() => onTitleChange(title)} />
+</section>
+
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("editor.label_settings.paper")}</h3>
+  <select id="label-paper" class="insp-field insp-select" onchange={(e) => applyPreset(Number(e.currentTarget.value))}>
+    {#each presets as preset, index (preset.title ?? `${preset.width}x${preset.height}-${index}`)}
+      <option value={index}>{preset.title ?? formatPresetSize(preset)}</option>
+    {/each}
+  </select>
+</section>
+
+<div class="insp-row">
+  <label class="insp-row__label" for="label-width">{$tr("editor.label_settings.width")}</label>
+  <div class="insp-unit">
+    <input
+      id="label-width"
+      class="insp-field"
+      type="number"
+      min="8"
+      bind:value={widthMm}
+      onchange={() => applySize()} />
+    <span>mm</span>
+  </div>
+</div>
+
+<div class="insp-row">
+  <label class="insp-row__label" for="label-height">{$tr("editor.label_settings.height")}</label>
+  <div class="insp-unit">
+    <input
+      id="label-height"
+      class="insp-field"
+      type="number"
+      min="8"
+      bind:value={heightMm}
+      onchange={() => applySize()} />
+    <span>mm</span>
+  </div>
+</div>
+
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("params.label.direction")}</h3>
+  <div class="insp-segment">
+    <button
+      type="button"
+      class:is-active={labelProps.printDirection === "left"}
+      onclick={() => onChange({ ...labelProps, printDirection: "left" as PrintDirection })}>
+      {$tr("params.label.direction.left")}
+    </button>
+    <button
+      type="button"
+      class:is-active={labelProps.printDirection === "top"}
+      onclick={() => onChange({ ...labelProps, printDirection: "top" as PrintDirection })}>
+      {$tr("params.label.direction.top")}
+    </button>
+  </div>
+</section>
+
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("params.label.shape")}</h3>
+  <div class="insp-segment">
+    <button
+      type="button"
+      class:is-active={(labelProps.shape ?? "rect") === "rect"}
+      onclick={() => onChange({ ...labelProps, shape: "rect" as LabelShape })}>
+      {$tr("editor.label_settings.shape.rect")}
+    </button>
+    <button
+      type="button"
+      class:is-active={labelProps.shape === "rounded_rect"}
+      onclick={() => onChange({ ...labelProps, shape: "rounded_rect" as LabelShape })}>
+      {$tr("editor.label_settings.shape.rounded")}
+    </button>
+    <button
+      type="button"
+      class:is-active={labelProps.shape === "circle"}
+      onclick={() => onChange({ ...labelProps, shape: "circle" as LabelShape })}>
+      {$tr("editor.label_settings.shape.circle")}
+    </button>
+  </div>
+</section>
+
+<label class="insp-check">
+  <input id="print-range" type="checkbox" checked={!!$appConfig.gridEnabled} onclick={toggleGrid} />
+  <span>{$tr("editor.label_settings.grid")}</span>
+</label>
+
+<section class="insp-section">
+  <h3 class="insp-heading">{$tr("editor.label_settings.advanced")}</h3>
+  <LabelPropsEditor {labelProps} {onChange} />
+</section>

@@ -51,7 +51,8 @@
 </script>
 
 <button
-  class="btn btn-outline-secondary"
+  type="button"
+  class="workspace-icon-btn"
   onclick={() => {
     show = true;
   }}>
@@ -60,40 +61,52 @@
 
 {#if show}
   <AppModal title={$tr("fonts.title")} bind:show>
-    <div class="mb-1">
+    <div class="font-list">
       {#each $userFonts as font (font.family)}
-        <div class="input-group input-group-sm mb-1">
-          <span class="input-group-text fs-5" style="font-family: {font.family}">{font.family}</span>
-          <button class="btn btn-sm btn-danger" onclick={() => removeFont(font.family)}>
+        <div class="ws-field-row">
+          <span class="insp-field font-name" style="font-family: {font.family}">{font.family}</span>
+          <button type="button" class="ws-btn" onclick={() => removeFont(font.family)}>
             <MdIcon icon="delete" />
           </button>
         </div>
       {:else}
-        👀
+        <p class="ws-help">{$tr("fonts.empty")}</p>
       {/each}
     </div>
 
-    <hr />
-
-    <div class="input-group input-group-sm">
-      <span class="input-group-text">{$tr("fonts.add")}</span>
-
-      <select class="form-select" bind:value={selectExt}>
+    <div class="ws-field-row add-row">
+      <span class="ws-suffix">{$tr("fonts.add")}</span>
+      <select class="insp-field insp-select" bind:value={selectExt}>
         <option value="ttf">ttf</option>
         <option value="woff2">woff2</option>
       </select>
-
-      <input type="text" class="form-control w-25" placeholder={$tr("fonts.title_override")} bind:value={overrideFamily} />
-
-      <button class="btn btn-sm btn-secondary" onclick={browseFont}>{$tr("fonts.browse")}</button>
+      <input class="insp-field" type="text" placeholder={$tr("fonts.title_override")} bind:value={overrideFamily} />
+      <button type="button" class="ws-btn" onclick={browseFont}>{$tr("fonts.browse")}</button>
     </div>
 
     {#snippet footer()}
-      <div class="text-secondary">
+      <div class="ws-help">
         {usedSpace}
         {$tr("params.saved_labels.kb_used")} |
-        <a class="text-secondary" href="https://fonts.google.com">{$tr("fonts.gfonts")}</a>
+        <a href="https://fonts.google.com">{$tr("fonts.gfonts")}</a>
       </div>
     {/snippet}
   </AppModal>
 {/if}
+
+<style>
+  .font-list {
+    display: grid;
+    gap: 8px;
+    margin-bottom: 16px;
+  }
+
+  .font-name {
+    display: flex;
+    align-items: center;
+  }
+
+  .add-row {
+    flex-wrap: wrap;
+  }
+</style>
