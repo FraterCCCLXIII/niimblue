@@ -1,7 +1,7 @@
 {
-  "name": "NiimBlue",
-  "short_name": "niimblue",
-  "description": "NIIMBOT custom web client/app. Design and print labels with NIIMBOT printers directly from your PC or mobile web browser!",
+  "name": "Pressmark",
+  "short_name": "Pressmark",
+  "description": "Design and print labels from your desktop or browser.",
   "icons": [
     {
       "src": "favicon.svg",

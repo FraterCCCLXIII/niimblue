@@ -8,7 +8,7 @@ import {
   type LabelPreset,
   type LabelProps,
 } from "$/types";
-import { OBJECT_DEFAULTS, OBJECT_DEFAULTS_VECTOR, THUMBNAIL_HEIGHT, THUMBNAIL_QUALITY } from "$/defaults";
+import { OBJECT_DEFAULTS, OBJECT_DEFAULTS_VECTOR, THUMBNAIL_HEIGHT } from "$/defaults";
 import { z } from "zod";
 import { CustomCanvas } from "$/fabric-object/custom_canvas";
 import { Capacitor } from "@capacitor/core";
@@ -145,16 +145,36 @@ export class FileUtils {
     FileUtils.downloadBase64Web(filename, mime, base64Data);
   }
 
-  static makeExportedLabel(canvas: fabric.Canvas, labelProps: LabelProps, includeCsv: boolean): ExportedLabelTemplate {
-    const thumbnailBase64: string = canvas.toDataURL({
-      width: canvas.width,
-      height: canvas.height,
+  static makeLabelThumbnail(source: fabric.Canvas | HTMLCanvasElement): string {
+    if (source instanceof HTMLCanvasElement) {
+      const scale = Math.max(2, THUMBNAIL_HEIGHT / Math.max(source.height, 1));
+      const out = document.createElement("canvas");
+      out.width = Math.max(1, Math.round(source.width * scale));
+      out.height = Math.max(1, Math.round(source.height * scale));
+      const ctx = out.getContext("2d");
+      if (!ctx) {
+        return source.toDataURL("image/png");
+      }
+      ctx.fillStyle = "#ffffff";
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(source, 0, 0, out.width, out.height);
+      return out.toDataURL("image/png");
+    }
+
+    return source.toDataURL({
+      width: source.width,
+      height: source.height,
       left: 0,
       top: 0,
-      multiplier: THUMBNAIL_HEIGHT / (canvas.height || 1),
-      quality: THUMBNAIL_QUALITY,
-      format: "jpeg",
+      multiplier: Math.max(2, (THUMBNAIL_HEIGHT * 2) / (source.height || 1)),
+      format: "png",
     });
+  }
+
+  static makeExportedLabel(canvas: fabric.Canvas, labelProps: LabelProps, includeCsv: boolean): ExportedLabelTemplate {
+    const thumbnailBase64 = FileUtils.makeLabelThumbnail(canvas);
 
     const tpl: ExportedLabelTemplate = {
       canvas: canvas.toJSON(),
@@ -282,6 +302,7 @@ export class FileUtils {
     await canvas.loadFromJSON(state, (_, obj) => {
       if (obj instanceof fabric.FabricObject) {
         obj.set({ snapAngle: OBJECT_DEFAULTS.snapAngle });
+        CanvasUtils.bakeTextObjectScale(obj);
         CanvasUtils.fixFabricObjectScale(obj);
 
         if (obj instanceof fabric.Line) {
@@ -380,7 +401,7 @@ export class FileUtils {
   static urlHashParamsToDict(): Record<string, string> {
     const anchorData = globalThis.location.hash.slice(1);
 
-    if (!anchorData) {
+    if (!anchorData || anchorData.startsWith("/")) {
       return {};
     }
 

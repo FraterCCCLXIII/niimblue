@@ -169,8 +169,8 @@ export class Barcode<
     const letterWidth = this._measureLetterWidth();
 
     ctx.save();
-    ctx.translate(-this.width / 2, -this.height / 2); // make top-left origin
-    ctx.translate(0.5, 0.5); // blurry rendering fix
+    ctx.translate(-this.width / 2, -this.height / 2);
+    ctx.translate(0.5, 0.5);
 
     ctx.font = this._getFont();
     ctx.textBaseline = "bottom";

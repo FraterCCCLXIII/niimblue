@@ -1,8 +1,10 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
   import WindowControls from "$/components/workspace/WindowControls.svelte";
   import { getDesktop } from "$/utils/desktop";
+  import { editorHref, libraryHref, type LibrarySection } from "$/utils/app_router";
   import { tr } from "$/utils/i18n";
 
   export interface WorkspaceTab {
@@ -13,15 +15,14 @@
   interface Props {
     tabs: WorkspaceTab[];
     activeTabId: string | null;
+    librarySection?: LibrarySection;
     showHome: boolean;
-    onHome: () => void;
-    onSelect: (id: string) => void;
     onClose: (id: string) => void;
     onCreate: () => void;
     children?: Snippet;
   }
 
-  let { tabs, activeTabId, showHome, onHome, onSelect, onClose, onCreate, children }: Props = $props();
+  let { tabs, activeTabId, librarySection = "recent", showHome, onClose, onCreate, children }: Props = $props();
 
   const desktop = getDesktop();
   const isMacDesktop = desktop?.platform === "darwin";
@@ -42,34 +43,36 @@
   {#if isMacDesktop}
     <WindowControls />
   {/if}
-  <button type="button" class="workspace-tab" class:is-active={showHome} onclick={onHome} title={$tr("editor.home")}>
+  <a href={libraryHref(librarySection)} class="workspace-tab" class:is-active={showHome} title={$tr("editor.home")}>
     <MdIcon icon="home" />
     {$tr("editor.home")}
-  </button>
+  </a>
 
-  <div class="workspace-tabbar__tabs">
+  <CustomScroll class="workspace-tabbar__tabs" axis="x">
     {#each tabs as tab (tab.id)}
-      <button type="button" class="workspace-tab" class:is-active={!showHome && activeTabId === tab.id} onclick={() => onSelect(tab.id)}>
+      <a href={editorHref(tab.id)} class="workspace-tab" class:is-active={!showHome && activeTabId === tab.id}>
         <span>{tab.title}</span>
         <span
           class="workspace-tab__close"
           role="button"
           tabindex="0"
           onclick={(e) => {
+            e.preventDefault();
             e.stopPropagation();
             onClose(tab.id);
           }}
           onkeydown={(e) => {
             if (e.key === "Enter") {
+              e.preventDefault();
               e.stopPropagation();
               onClose(tab.id);
             }
           }}>
           <MdIcon icon="close" />
         </span>
-      </button>
+      </a>
     {/each}
-  </div>
+  </CustomScroll>
 
   <button type="button" class="workspace-icon-btn" onclick={onCreate} title={$tr("library.create")}>
     <MdIcon icon="add" />

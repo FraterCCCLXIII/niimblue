@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
   import { tr } from "$/utils/i18n";
 
   export type InspectorTab = "label" | "object";
@@ -41,11 +42,11 @@
     </button>
   </div>
 
-  <div class="inspector-body" role="tabpanel">
+  <CustomScroll class="inspector-body" role="tabpanel">
     {#if tab === "label"}
       {@render label()}
     {:else}
       {@render object()}
     {/if}
-  </div>
+  </CustomScroll>
 </aside>

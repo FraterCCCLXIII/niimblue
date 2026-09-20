@@ -1,9 +1,9 @@
 <script lang="ts">
   import { tr } from "$/utils/i18n";
   import { csvParse } from "d3-dsv";
-  import MdIcon from "$/components/basic/MdIcon.svelte";
   import { type CsvParams } from "$/types";
   import { csvData } from "$/stores";
+  import AppModal from "$/components/basic/AppModal.svelte";
 
   interface Props {
     enabled: boolean;
@@ -12,6 +12,7 @@
 
   let { enabled = $bindable(), onPlaceholderPicked }: Props = $props();
 
+  let show = $state(false);
   let placeholders = $state<string[]>([]);
   let rows = $state<number>(0);
 
@@ -26,50 +27,54 @@
   });
 </script>
 
-<div class="dropdown">
-  <button
-    class="btn btn-sm btn-{enabled ? 'warning' : 'secondary'}"
-    data-bs-toggle="dropdown"
-    data-bs-auto-close="outside"
-    title={$tr("params.csv.title")}>
-    <MdIcon icon="dataset" />
-  </button>
-  <div class="dropdown-menu">
-    <h6 class="dropdown-header">{$tr("params.csv.title")}</h6>
-    <div class="p-3 text-body-secondary">
-      <div class="form-check form-switch">
-        <input class="form-check-input" type="checkbox" role="switch" id="enabled" bind:checked={enabled} />
-        <label class="form-check-label" for="enabled">{$tr("params.csv.enabled")}</label>
-      </div>
+<button type="button" class="ws-btn" onclick={() => (show = true)}>
+  {$tr("editor.data_source.import")}
+</button>
 
-      <div class="mt-3">
-        {$tr("params.csv.tip")}
-      </div>
+{#if show}
+  <AppModal bind:show title={$tr("params.csv.title")}>
+    <label class="ws-check">
+      <input type="checkbox" bind:checked={enabled} />
+      <span>{$tr("params.csv.enabled")}</span>
+    </label>
 
-      <textarea class="dsv form-control my-3" bind:value={$csvData.data} oninput={() => (enabled = true)}></textarea>
+    <p class="ws-help">{$tr("params.csv.tip")}</p>
 
-      <div class="placeholders pt-1">
-        {$tr("params.csv.rowsfound")} <strong>{rows}</strong>
-      </div>
-      <div class="placeholders pt-1">
-        {$tr("params.csv.placeholders")}
-        {#each placeholders as p (p)}
-          <button class="btn btn-sm btn-outline-info px-1 py-0" onclick={() => onPlaceholderPicked(p)}
-            >{`{${p}}`}
-          </button>
-        {/each}
-      </div>
+    <textarea class="insp-field insp-textarea dsv" bind:value={$csvData.data} oninput={() => (enabled = true)}></textarea>
+
+    <p class="ws-help">
+      {$tr("params.csv.rowsfound")}
+      <strong>{rows}</strong>
+    </p>
+    <div class="placeholders">
+      <span class="ws-help">{$tr("params.csv.placeholders")}</span>
+      {#each placeholders as placeholder (placeholder)}
+        <button type="button" class="ws-btn" onclick={() => onPlaceholderPicked(placeholder)}>
+          {`{${placeholder}}`}
+        </button>
+      {/each}
     </div>
-  </div>
-</div>
+
+    {#snippet footer()}
+      <button type="button" class="ws-btn ws-btn-primary" onclick={() => (show = false)}>
+        {$tr("params.csv.done")}
+      </button>
+    {/snippet}
+  </AppModal>
+{/if}
 
 <style>
-  .dropdown-menu {
-    width: 100vw;
-    max-width: 450px;
-  }
   textarea.dsv {
-    font-family: monospace;
-    min-height: 240px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    min-height: 220px;
+    width: 100%;
+    resize: vertical;
+  }
+
+  .placeholders {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
   }
 </style>

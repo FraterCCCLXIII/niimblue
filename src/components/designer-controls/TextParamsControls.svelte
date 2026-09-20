@@ -4,14 +4,17 @@
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import FontFamilyPicker from "$/components/designer-controls/FontFamilyPicker.svelte";
   import { TextboxExt } from "$/fabric-object/textbox-ext";
+  import { alignObjectsToEachOther } from "$/utils/object_align";
 
   interface Props {
     selectedText: fabric.IText;
+    targets?: fabric.FabricObject[];
     editRevision: number;
     valueUpdated: () => void;
   }
 
-  let { selectedText, editRevision, valueUpdated }: Props = $props();
+  let { selectedText, targets = [], editRevision, valueUpdated }: Props = $props();
+  const alignTogether = $derived(targets.length > 1);
 
   const sizeMin = 1;
   const sizeMax = 999;
@@ -36,11 +39,20 @@
   );
 
   const setXAlign = (align: fabric.TextboxProps["textAlign"]) => {
-    selectedText.set({ textAlign: align });
+    if (alignTogether && align && align !== "justify") {
+      alignObjectsToEachOther(targets, align);
+    } else {
+      selectedText.set({ textAlign: align });
+    }
     valueUpdated();
   };
 
   const setYAlign = (align: fabric.TOriginY) => {
+    if (alignTogether) {
+      alignObjectsToEachOther(targets, align === "center" ? "middle" : align);
+      valueUpdated();
+      return;
+    }
     const pos = selectedText.getPointByOrigin("left", "top");
     selectedText.set({ originY: align });
     selectedText.setPositionByOrigin(pos, "left", "top");
@@ -167,21 +179,21 @@
     <div class="insp-group">
       <button
         type="button"
-        class:is-active={selectedText.textAlign === "left"}
+        class:is-active={!alignTogether && selectedText.textAlign === "left"}
         title={$tr("params.text.align.left")}
         onclick={() => setXAlign("left")}>
         <MdIcon icon="format_align_left" />
       </button>
       <button
         type="button"
-        class:is-active={selectedText.textAlign === "center"}
+        class:is-active={!alignTogether && selectedText.textAlign === "center"}
         title={$tr("params.text.align.center")}
         onclick={() => setXAlign("center")}>
         <MdIcon icon="format_align_center" />
       </button>
       <button
         type="button"
-        class:is-active={selectedText.textAlign === "right"}
+        class:is-active={!alignTogether && selectedText.textAlign === "right"}
         title={$tr("params.text.align.right")}
         onclick={() => setXAlign("right")}>
         <MdIcon icon="format_align_right" />
@@ -197,21 +209,21 @@
     <div class="insp-group insp-group--compact">
       <button
         type="button"
-        class:is-active={selectedText.originY === "top"}
+        class:is-active={!alignTogether && selectedText.originY === "top"}
         title={$tr("params.text.vorigin.top")}
         onclick={() => setYAlign("top")}>
         <MdIcon icon="vertical_align_top" />
       </button>
       <button
         type="button"
-        class:is-active={selectedText.originY === "center"}
+        class:is-active={!alignTogether && selectedText.originY === "center"}
         title={$tr("params.text.vorigin.center")}
         onclick={() => setYAlign("center")}>
         <MdIcon icon="vertical_align_center" />
       </button>
       <button
         type="button"
-        class:is-active={selectedText.originY === "bottom"}
+        class:is-active={!alignTogether && selectedText.originY === "bottom"}
         title={$tr("params.text.vorigin.bottom")}
         onclick={() => setYAlign("bottom")}>
         <MdIcon icon="vertical_align_bottom" />

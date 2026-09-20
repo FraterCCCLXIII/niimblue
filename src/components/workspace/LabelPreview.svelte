@@ -55,7 +55,7 @@
 </script>
 
 <div class="label-preview" style={`aspect-ratio: ${canvasWidth} / ${canvasHeight}`}>
-  <svg viewBox={`0 0 ${canvasWidth} ${canvasHeight}`} role="img" aria-hidden="true">
+  <svg viewBox={`0 0 ${canvasWidth} ${canvasHeight}`} preserveAspectRatio="xMidYMid meet" role="img" aria-hidden="true">
     <rect
       x="0"
       y="0"
@@ -101,8 +101,10 @@
 
 <style>
   .label-preview {
-    width: 86%;
-    max-height: 88%;
+    width: auto;
+    height: auto;
+    max-width: calc(100% - 20px);
+    max-height: calc(100% - 20px);
     background: #fff;
     border-radius: 8px;
     box-shadow: 0 1px 4px rgba(17, 17, 17, 0.08);

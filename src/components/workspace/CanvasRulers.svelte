@@ -5,13 +5,14 @@
   interface Props {
     container?: HTMLElement;
     target?: HTMLElement;
+    originPad?: number;
     dpmm: number;
     zoom: number;
     printDirection: PrintDirection;
     revision?: number;
   }
 
-  let { container, target, dpmm, zoom, printDirection, revision = 0 }: Props = $props();
+  let { container, target, originPad = 0, dpmm, zoom, printDirection, revision = 0 }: Props = $props();
 
   const RULER = 20;
   let hCanvas: HTMLCanvasElement | undefined = $state();
@@ -25,8 +26,8 @@
     const cr = container.getBoundingClientRect();
     const tr = target.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    const originX = tr.left - cr.left;
-    const originY = tr.top - cr.top;
+    const originX = tr.left - cr.left + originPad;
+    const originY = tr.top - cr.top + originPad;
     const pxPerMm = Math.max(dpmm * zoom, 0.01);
 
     paintRuler(hCanvas, cr.width, RULER, dpr, originX, pxPerMm, "horizontal");
@@ -60,10 +61,10 @@
 
     ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
     ctx.clearRect(0, 0, cssW, cssH);
-    ctx.fillStyle = "#e8eef4";
+    ctx.fillStyle = "#ffffff";
     ctx.fillRect(0, 0, cssW, cssH);
 
-    ctx.strokeStyle = "#d5dee6";
+    ctx.strokeStyle = "#ececec";
     ctx.lineWidth = 1;
     ctx.beginPath();
     if (axis === "horizontal") {
@@ -125,6 +126,7 @@
     void zoom;
     void revision;
     void printDirection;
+    void originPad;
     const stage = container;
     const canvas = target;
     const onScroll = () => draw();
@@ -154,7 +156,7 @@
   <canvas class="canvas-rulers__v" bind:this={vCanvas}></canvas>
   <div class="canvas-rulers__direction" class:is-left={printDirection === "left"} class:is-top={printDirection === "top"}>
     {$tr("editor.canvas.direction")}
-    <span>{printDirection === "top" ? "↓" : "←"}</span>
+    <span>{printDirection === "top" ? "↑" : "←"}</span>
   </div>
 </div>
 
@@ -172,9 +174,9 @@
     left: 0;
     width: 20px;
     height: 20px;
-    background: #e8eef4;
-    border-right: 1px solid #d5dee6;
-    border-bottom: 1px solid #d5dee6;
+    background: #ffffff;
+    border-right: 1px solid #ececec;
+    border-bottom: 1px solid #ececec;
     z-index: 3;
   }
 

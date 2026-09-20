@@ -24,6 +24,8 @@
   import { CustomCanvas } from "$/fabric-object/custom_canvas";
   import { FileUtils } from "$/utils/file_utils";
   import AppModal from "$/components/basic/AppModal.svelte";
+  import { normalizeLabelPrintDirection } from "$/utils/label_template";
+  import { fitPrintCanvas, printerScale } from "$/utils/print_raster";
 
   interface Props {
     labelProps: LabelProps;
@@ -138,7 +140,10 @@
       await generatePreviewData(page);
 
       try {
-        const encoded: EncodedImage = ImageEncoder.encodeCanvas(previewCanvas, labelProps.printDirection);
+        const encoded: EncodedImage = ImageEncoder.encodeCanvas(
+          previewCanvas,
+          normalizeLabelPrintDirection(labelProps).printDirection,
+        );
         await currentPrintTask.printInit();
         await currentPrintTask.printPage(encoded, quantity);
       } catch (e) {
@@ -187,7 +192,7 @@
           timestamp: FileUtils.timestamp(),
           copies: quantity * Math.max(pagesTotal, 1),
           pages: pagesTotal,
-          thumbnailBase64: previewCanvas?.toDataURL("image/jpeg", 0.7),
+          thumbnailBase64: previewCanvas ? FileUtils.makeLabelThumbnail(previewCanvas) : undefined,
           sourceId,
           size: labelProps.size,
         });
@@ -250,7 +255,8 @@
     }
 
     if ($printerMeta !== undefined) {
-      const headSize = labelProps.printDirection == "left" ? previewCanvas.height : previewCanvas.width;
+      const printDirection = normalizeLabelPrintDirection(labelProps).printDirection;
+      const headSize = printDirection == "left" ? previewCanvas.height : previewCanvas.width;
       if (headSize > $printerMeta.printheadPixels) {
         offsetWarning += $tr("params.label.warning.width") + " ";
         offsetWarning += `(${headSize} > ${$printerMeta.printheadPixels})`;
@@ -328,9 +334,11 @@
   };
 
   const generatePreviewData = async (page: number): Promise<void> => {
+    const printDirection = normalizeLabelPrintDirection(labelProps).printDirection;
     const fabricTempCanvas = new CustomCanvas(undefined, {
       width: labelProps.size.width,
       height: labelProps.size.height,
+      enableRetinaScaling: false,
     });
 
     fabricTempCanvas.setCustomBackground(false);
@@ -339,6 +347,11 @@
     fabricTempCanvas.setLabelProps(labelProps);
 
     await fabricTempCanvas.loadFromJSON(canvasCallback());
+    fabricTempCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+    fabricTempCanvas.setDimensions({
+      width: labelProps.size.width,
+      height: labelProps.size.height,
+    });
 
     let variables = {};
 
@@ -358,7 +371,8 @@
 
     fabricTempCanvas.requestRenderAll();
 
-    const preRenderedCanvas = fabricTempCanvas.toCanvasElement();
+    const scale = printerScale($printerMeta?.dpi);
+    const preRenderedCanvas = fitPrintCanvas(fabricTempCanvas.toCanvasElement(scale), printDirection);
     const ctx = preRenderedCanvas.getContext("2d")!;
     previewCanvas.width = preRenderedCanvas.width;
     previewCanvas.height = preRenderedCanvas.height;
@@ -416,6 +430,7 @@
 
     await generatePreviewData(page);
 
+    // Only automation sets printNow; the Print button opens this modal for confirmation.
     if (printNow && !$disconnected && printState === "idle") {
       onPrint();
     }
@@ -430,7 +445,7 @@
       </button>
     {/if}
 
-    <canvas class="print-start-{labelProps.printDirection}" bind:this={previewCanvas}></canvas>
+    <canvas class="print-start-{normalizeLabelPrintDirection(labelProps).printDirection}" bind:this={previewCanvas}></canvas>
 
     {#if pagesTotal > 1}
       <button disabled={printState !== "idle"} class="btn w-100 fs-1" onclick={pageUp}>

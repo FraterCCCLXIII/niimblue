@@ -8,6 +8,7 @@
   import { Toasts } from "$/utils/toasts";
   import Dropdown from "bootstrap/js/dist/dropdown";
   import { FileUtils } from "$/utils/file_utils";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
   import * as fabric from "fabric";
   import { Utils } from "@mmote/niimbluelib";
 
@@ -202,7 +203,7 @@
 </script>
 
 <div class="dropdown">
-  <button class="btn btn-sm btn-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+  <button class="btn btn-sm btn-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside" use:fixedDropdown>
     <MdIcon icon="sd_storage" />
   </button>
   <div class="saved-labels dropdown-menu" bind:this={dropdownRef}>
@@ -233,7 +234,8 @@
             type="button"
             aria-label="dropdown"
             class="btn btn-outline-secondary dropdown-toggle dropdown-toggle-split"
-            data-bs-toggle="dropdown">
+            data-bs-toggle="dropdown"
+            use:fixedDropdown>
           </button>
           <ul class="dropdown-menu">
             <li>

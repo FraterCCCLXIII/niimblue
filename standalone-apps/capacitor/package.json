@@ -1,7 +1,7 @@
 {
   "name": "niimblues",
   "version": "1.0.0",
-  "description": "NiimBlue standalone app",
+  "description": "Pressmark standalone app",
   "type": "module",
   "scripts": {
     "build-www": "cd ../.. && vite build --outDir ./standalone-apps/capacitor/www",

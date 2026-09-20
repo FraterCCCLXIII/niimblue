@@ -2,6 +2,7 @@
   import type { LabelPreset } from "$/types";
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
 
   interface Props {
     onItemSelected: (index: number) => void;
@@ -38,7 +39,8 @@
   };
 </script>
 
-<div class="preset-browser overflow-y-auto border d-flex p-2 gap-1 flex-wrap {className}">
+<CustomScroll class="preset-browser border {className}">
+  <div class="d-flex p-2 gap-1 flex-wrap">
   <!-- fixme: key -->
   {#each presets as item, idx (item)}
     <div
@@ -77,13 +79,19 @@
       </div>
     </div>
   {/each}
-</div>
+  </div>
+</CustomScroll>
 
 <style>
   .preset-browser {
+    height: auto;
     max-height: 200px;
     max-width: 100%;
     min-height: 96px;
+  }
+
+  .preset-browser :global(.ws-scroll__view) {
+    max-height: 200px;
   }
 
   .card-wrapper {

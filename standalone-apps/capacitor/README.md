@@ -1,4 +1,4 @@
-## NiimBlue standalone app
+## Pressmark standalone app
 
 Install dependencies
 

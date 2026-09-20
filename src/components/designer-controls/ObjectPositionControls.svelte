@@ -5,6 +5,7 @@
   import { onDestroy } from "svelte";
   import QRCode from "$/fabric-object/qrcode";
   import Barcode from "$/fabric-object/barcode";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
 
   interface Props {
     selectedObject: fabric.FabricObject;
@@ -100,6 +101,7 @@
     class="btn btn-sm btn-secondary dropdown-toggle"
     type="button"
     data-bs-toggle="dropdown"
+    use:fixedDropdown
     title={$tr("params.generic.position")}>
     <MdIcon icon="control_camera" />
   </button>

@@ -1,0 +1,117 @@
+export const LIBRARY_SECTIONS = ["recent", "mine", "history", "catalog"] as const;
+
+export type LibrarySection = (typeof LIBRARY_SECTIONS)[number];
+
+export type AppRoute =
+  | { name: "library"; section: LibrarySection }
+  | { name: "editor"; tabId?: string }
+  | { name: "settings" }
+  | { name: "debug" };
+
+const ROUTE_EVENT = "nb:route";
+
+const isLibrarySection = (value: string | undefined): value is LibrarySection =>
+  !!value && (LIBRARY_SECTIONS as readonly string[]).includes(value);
+
+const hashPath = (hash = globalThis.location?.hash ?? ""): string => {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  return decodeURIComponent(raw.split("&")[0] ?? "");
+};
+
+export const isShareHash = (hash = globalThis.location?.hash ?? ""): boolean => {
+  const raw = hash.startsWith("#") ? hash.slice(1) : hash;
+  if (!raw) {
+    return false;
+  }
+  return raw.startsWith("load=") || raw.startsWith("uload=") || raw.includes("&load=") || raw.includes("&uload=");
+};
+
+export const parseAppRoute = (hash = globalThis.location?.hash ?? ""): AppRoute | null => {
+  if (isShareHash(hash)) {
+    return null;
+  }
+  const path = hashPath(hash);
+  if (!path.startsWith("/")) {
+    return null;
+  }
+  const [page, param] = path.split("/").filter(Boolean);
+  if (page === "library") {
+    return { name: "library", section: isLibrarySection(param) ? param : "recent" };
+  }
+  if (page === "editor") {
+    return { name: "editor", tabId: param };
+  }
+  if (page === "settings") {
+    return { name: "settings" };
+  }
+  if (page === "debug") {
+    return { name: "debug" };
+  }
+  return { name: "library", section: "recent" };
+};
+
+export const appRouteHash = (route: AppRoute): string => {
+  if (route.name === "library") {
+    return `#/library/${route.section}`;
+  }
+  if (route.name === "editor") {
+    return route.tabId ? `#/editor/${encodeURIComponent(route.tabId)}` : "#/editor";
+  }
+  return route.name === "settings" ? "#/settings" : "#/debug";
+};
+
+export const libraryHref = (section: LibrarySection = "recent"): string => appRouteHash({ name: "library", section });
+
+export const editorHref = (tabId?: string): string => appRouteHash({ name: "editor", tabId });
+
+export const settingsHref = (): string => appRouteHash({ name: "settings" });
+
+export const debugHref = (): string => appRouteHash({ name: "debug" });
+
+export const currentAppRoute = (): AppRoute | null => parseAppRoute();
+
+export const sameAppRoute = (left: AppRoute, right: AppRoute): boolean => {
+  if (left.name !== right.name) {
+    return false;
+  }
+  if (left.name === "library" && right.name === "library") {
+    return left.section === right.section;
+  }
+  if (left.name === "editor" && right.name === "editor") {
+    return (left.tabId ?? "") === (right.tabId ?? "");
+  }
+  return true;
+};
+
+export const navigateApp = (route: AppRoute, mode: "push" | "replace" = "push") => {
+  if (typeof window === "undefined") {
+    return;
+  }
+  const next = appRouteHash(route);
+  if (window.location.hash === next) {
+    return;
+  }
+  if (mode === "replace") {
+    window.history.replaceState(window.history.state, "", next);
+  } else {
+    window.history.pushState(window.history.state, "", next);
+  }
+  window.dispatchEvent(new Event(ROUTE_EVENT));
+};
+
+export const subscribeAppRoute = (onRoute: (route: AppRoute) => void): (() => void) => {
+  const notify = () => {
+    const route = parseAppRoute();
+    if (route) {
+      onRoute(route);
+    }
+  };
+  window.addEventListener("hashchange", notify);
+  window.addEventListener("popstate", notify);
+  window.addEventListener(ROUTE_EVENT, notify);
+  return () => {
+    window.removeEventListener("hashchange", notify);
+    window.removeEventListener("popstate", notify);
+    window.removeEventListener(ROUTE_EVENT, notify);
+  };
+};

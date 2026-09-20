@@ -1,11 +1,13 @@
 import * as fabric from "fabric";
 import type { AppConfig, LabelPreset, LabelProps } from "$/types";
 import { TextboxExt } from "$/fabric-object/textbox-ext";
+import { applySelectionChromeDefaults, selectionChromeForZoom } from "$/utils/selection_chrome";
 
 export const configureFabric = () => {
   fabric.config.disableStyleCopyPaste = true;
 
   fabric.classRegistry.setClass(TextboxExt, "Textbox");
+  applySelectionChromeDefaults(selectionChromeForZoom(1));
 
   fabric.Line.prototype.setControlsVisibility({
     tl: false,
@@ -29,7 +31,7 @@ export const configureFabric = () => {
 /** Default presets for LabelPropsEditor */
 export const DEFAULT_LABEL_PRESETS: LabelPreset[] = [
   // 203dpi
-  { width: 40, height: 20, unit: "mm", dpmm: 8, printDirection: "left", shape: "rounded_rect", title: "40×20mm" },
+  { width: 40, height: 20, unit: "mm", dpmm: 8, printDirection: "top", shape: "rounded_rect", title: "40×20mm" },
   { width: 40, height: 12, unit: "mm", dpmm: 8, printDirection: "left", shape: "rect", title: "40×12mm" },
   { width: 50, height: 30, unit: "mm", dpmm: 8, printDirection: "top", shape: "rect", title: "50×30mm" },
   // 300dpi
@@ -84,8 +86,36 @@ export const OBJECT_DEFAULTS_TEXT = {
   lineHeight: 1,
 } as fabric.TextboxProps;
 
+/** Fonts always offered in the picker, including bundled faces. */
+export const APP_FONTS: string[] = [
+  "Noto Sans Variable",
+  "Noto Serif Variable",
+  "Roboto Flex Variable",
+  "JetBrains Mono Variable",
+  "Arial",
+  "Helvetica",
+  "Helvetica Neue",
+  "Times New Roman",
+  "Georgia",
+  "Palatino",
+  "Garamond",
+  "Courier New",
+  "Menlo",
+  "Monaco",
+  "Verdana",
+  "Tahoma",
+  "Trebuchet MS",
+  "Gill Sans",
+  "Impact",
+  "Comic Sans MS",
+  "system-ui",
+  "ui-serif",
+  "ui-monospace",
+  "ui-rounded",
+];
+
 /** Scale image to this height when making a label thumbnail */
-export const THUMBNAIL_HEIGHT = 48;
+export const THUMBNAIL_HEIGHT = 160;
 
 /** Generate thumbnail in jpeg format with this quality */
 export const THUMBNAIL_QUALITY = 0.7;

@@ -4,6 +4,8 @@
   import { appConfig } from "$/stores";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import ObjectPositionControls from "$/components/designer-controls/ObjectPositionControls.svelte";
+  import { CustomCanvas } from "$/fabric-object/custom_canvas";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
 
 
   interface Props {
@@ -33,29 +35,31 @@
   };
 
   const fit = () => {
+    const canvas = selectedObject.canvas!;
+    const size = canvas instanceof CustomCanvas ? canvas.getLabelSize() : { width: canvas.getWidth(), height: canvas.getHeight() };
     const imageRatio = selectedObject.width / selectedObject.height;
-    const canvasRatio = selectedObject.canvas!.width / selectedObject.canvas!.height;
+    const canvasRatio = size.width / size.height;
 
     if ($appConfig.fitMode === "ratio_min") {
       if (imageRatio > canvasRatio) {
-        selectedObject.scaleToWidth(selectedObject.canvas!.width);
+        selectedObject.scaleToWidth(size.width);
       } else {
-        selectedObject.scaleToHeight(selectedObject.canvas!.height);
+        selectedObject.scaleToHeight(size.height);
       }
-      selectedObject.canvas!.centerObject(selectedObject);
+      canvas.centerObject(selectedObject);
     } else if ($appConfig.fitMode === "ratio_max") {
       if (imageRatio > canvasRatio) {
-        selectedObject.scaleToHeight(selectedObject.canvas!.height);
+        selectedObject.scaleToHeight(size.height);
       } else {
-        selectedObject.scaleToWidth(selectedObject.canvas!.width);
+        selectedObject.scaleToWidth(size.width);
       }
-      selectedObject.canvas!.centerObject(selectedObject);
+      canvas.centerObject(selectedObject);
     } else {
       selectedObject.set({
         left: 0,
         top: 0,
-        scaleX: selectedObject.canvas!.width / selectedObject.width,
-        scaleY: selectedObject.canvas!.height / selectedObject.height,
+        scaleX: size.width / selectedObject.width,
+        scaleY: size.height / selectedObject.height,
       });
     }
     valueUpdated();
@@ -83,6 +87,7 @@
     class="btn btn-sm btn-secondary dropdown-toggle"
     type="button"
     data-bs-toggle="dropdown"
+    use:fixedDropdown
     title={$tr("params.generic.arrange")}>
     <MdIcon icon="segment" />
   </button>
@@ -105,7 +110,8 @@
       aria-label="Toggle"
       type="button"
       class="btn btn-secondary dropdown-toggle dropdown-toggle-split px-1"
-      data-bs-toggle="dropdown"></button>
+      data-bs-toggle="dropdown"
+      use:fixedDropdown></button>
     <div class="dropdown-menu p-1">
       <select class="form-select form-select-sm" value={$appConfig.fitMode ?? "stretch"} onchange={fitModeChanged}>
         <option value="stretch">{$tr("params.generic.fit.mode.stretch")}</option>

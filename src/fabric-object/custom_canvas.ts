@@ -1,6 +1,11 @@
 import * as fabric from "fabric";
 import { DEFAULT_LABEL_PROPS, GRID_SIZE } from "$/defaults";
 import type { LabelProps } from "$/types";
+import {
+  applySelectionChromeDefaults,
+  applySelectionChromeToObject,
+  selectionChromeForZoom,
+} from "$/utils/selection_chrome";
 
 type LabelBounds = {
   startX: number;
@@ -18,8 +23,15 @@ type FoldInfo = {
 };
 type MirrorInfo = { pos: fabric.Point; flip: boolean };
 
+/** Screen-space gutter around the label so selection handles are not clipped. */
+export const ARTBOARD_CHROME_PAD = 24;
+
 export class CustomCanvas extends fabric.Canvas {
   private labelProps: LabelProps = DEFAULT_LABEL_PROPS;
+  private labelWidth = 1;
+  private labelHeight = 1;
+  private artboardChrome = false;
+  private refreshingArtboard = false;
   private readonly SEPARATOR_LINE_WIDTH = 2;
   private readonly ROUND_RADIUS = 10;
   private readonly TAIL_WIDTH = 40;
@@ -30,32 +42,37 @@ export class CustomCanvas extends fabric.Canvas {
   private gridEnabled: boolean = false;
   private virtualZoomRatio: number = 1;
   onZoomChange?: (zoom: number) => void;
+  onPan?: (dx: number, dy: number) => void;
 
   constructor(
     el?: string | HTMLCanvasElement,
     options?: fabric.TOptions<fabric.CanvasOptions>,
   ) {
-    super(el, options);
+    super(el, { allowTouchScrolling: true, backgroundVpt: true, ...options });
+    this.labelWidth = this.width || 1;
+    this.labelHeight = this.height || 1;
+    this.artboardChrome = !!el && options?.enableRetinaScaling !== false;
+    this.backgroundVpt = true;
+    const wrapper = this.getElement()?.parentElement;
+    if (wrapper) {
+      wrapper.style.overflow = "visible";
+    }
     this.setupZoomAndPan();
     this.preserveObjectStacking = true;
+    this.selectionColor = "rgba(76, 154, 255, 0.08)";
+    this.selectionBorderColor = "#4C9AFF";
+    this.applySelectionChrome();
+    this.on("object:added", (e) => {
+      if (e.target) {
+        applySelectionChromeToObject(e.target, selectionChromeForZoom(this.virtualZoomRatio));
+      }
+    });
+    if (this.artboardChrome) {
+      this.refreshArtboard();
+    }
   }
 
   private setupZoomAndPan() {
-    this.on("mouse:wheel", (opt) => {
-      const event = opt.e as WheelEvent;
-
-      if (event.ctrlKey) {
-        event.preventDefault();
-
-        const delta = event.deltaY;
-        if (delta > 0) {
-          this.virtualZoomOut();
-        } else {
-          this.virtualZoomIn();
-        }
-      }
-    });
-
     const container = this.getElement().parentElement;
     if (!container) return;
 
@@ -123,11 +140,7 @@ export class CustomCanvas extends fabric.Canvas {
             const dx = currentMidPoint.x - lastMidPoint.x;
             const dy = currentMidPoint.y - lastMidPoint.y;
 
-            const wrapper = this.getElement().closest(".canvas-wrapper");
-            if (wrapper) {
-              wrapper.scrollLeft -= dx;
-              wrapper.scrollTop -= dy;
-            }
+            this.onPan?.(dx, dy);
             lastMidPoint = currentMidPoint;
           }
         },
@@ -146,18 +159,104 @@ export class CustomCanvas extends fabric.Canvas {
     container.addEventListener("touchcancel", stopTouch);
   }
 
+  /**
+   * Keep the drawing buffer at devicePixelRatio × view zoom so CSS zoom does
+   * not stretch label pixels. Print canvases use enableRetinaScaling=false.
+   */
+  override getRetinaScaling(): number {
+    return super.getRetinaScaling() * (this.virtualZoomRatio ?? 1);
+  }
+
   public virtualZoom(newZoom: number) {
     this.virtualZoomRatio = Math.min(Math.max(0.25, newZoom), 4);
-    this.setDimensions(
-      {
-        width: this.virtualZoomRatio * this.getWidth() + "px",
-        height: this.virtualZoomRatio * this.getHeight() + "px",
-      },
-      { cssOnly: true },
-    );
+    this.refreshArtboard();
+    this.forEachObject((obj) => {
+      obj.set("dirty", true);
+    });
     if (this.onZoomChange) {
       this.onZoomChange(this.virtualZoomRatio);
     }
+  }
+
+  private artboardInset(): number {
+    if (!this.artboardChrome) {
+      return 0;
+    }
+    return ARTBOARD_CHROME_PAD / Math.max(this.virtualZoomRatio, 0.01);
+  }
+
+  public getLabelSize(): { width: number; height: number } {
+    return { width: this.labelWidth, height: this.labelHeight };
+  }
+
+  public setLabelSize(width: number, height: number) {
+    this.labelWidth = Math.max(1, width);
+    this.labelHeight = Math.max(1, height);
+    this.refreshArtboard();
+  }
+
+  override setDimensions(size: { width?: number | string; height?: number | string }, options?: { cssOnly?: boolean; backstoreOnly?: boolean }) {
+    if (this.artboardChrome && !this.refreshingArtboard && !options?.cssOnly && !options?.backstoreOnly) {
+      const width = typeof size.width === "number" ? size.width : this.labelWidth;
+      const height = typeof size.height === "number" ? size.height : this.labelHeight;
+      this.setLabelSize(width, height);
+      return;
+    }
+    super.setDimensions(size as never, options as never);
+  }
+
+  override async loadFromJSON(...args: Parameters<fabric.Canvas["loadFromJSON"]>) {
+    const [json, ...rest] = args;
+    const parsed = typeof json === "string" ? (JSON.parse(json) as Record<string, unknown>) : json;
+    if (parsed && typeof parsed === "object") {
+      const { width: _width, height: _height, viewportTransform: _vpt, ...objectsOnly } = parsed as Record<string, unknown>;
+      const result = await super.loadFromJSON(objectsOnly as typeof json, ...rest);
+      this.refreshArtboard();
+      return result;
+    }
+    const result = await super.loadFromJSON(...args);
+    this.refreshArtboard();
+    return result;
+  }
+
+  override getCenterPoint(): fabric.Point {
+    const bounds = this.getLabelBounds();
+    return new fabric.Point(bounds.startX + bounds.width / 2, bounds.startY + bounds.height / 2);
+  }
+
+  private refreshArtboard() {
+    if (this.refreshingArtboard) {
+      return;
+    }
+    this.refreshingArtboard = true;
+    const inset = this.artboardInset();
+    const width = this.labelWidth + inset * 2;
+    const height = this.labelHeight + inset * 2;
+    this.setViewportTransform([1, 0, 0, 1, inset, inset]);
+    super.setDimensions({ width, height }, { backstoreOnly: true });
+    if (this.getElement()) {
+      super.setDimensions(
+        {
+          width: `${width * this.virtualZoomRatio}px`,
+          height: `${height * this.virtualZoomRatio}px`,
+        },
+        { cssOnly: true },
+      );
+    }
+    this.refreshingArtboard = false;
+    this.applySelectionChrome();
+  }
+
+  private applySelectionChrome() {
+    const chrome = selectionChromeForZoom(this.virtualZoomRatio);
+    applySelectionChromeDefaults(chrome);
+    this.forEachObject((obj) => applySelectionChromeToObject(obj, chrome));
+    const active = this.getActiveObject();
+    if (active) {
+      applySelectionChromeToObject(active, chrome);
+    }
+    this.selectionLineWidth = chrome.borderScaleFactor;
+    this.requestRenderAll();
   }
 
   public virtualZoomIn() {
@@ -196,8 +295,8 @@ export class CustomCanvas extends fabric.Canvas {
 
   /** Get label bounds without tail */
   getLabelBounds(): LabelBounds {
-    let endX = this.width ?? 1;
-    let endY = this.height ?? 1;
+    let endX = this.labelWidth || this.width || 1;
+    let endY = this.labelHeight || this.height || 1;
     let startX = 0;
     let startY = 0;
 
@@ -278,17 +377,24 @@ export class CustomCanvas extends fabric.Canvas {
       return;
     }
 
+    // Fabric applies viewportTransform only to objects. Keep the label
+    // paper in that same space so chrome padding does not shift contents.
+    if (this.artboardChrome && this.backgroundVpt) {
+      ctx.transform(...this.viewportTransform);
+    }
+
     // Disable further actions for circle labels, just render
+    const bb = this.getLabelBounds();
+
     if (this.labelProps.shape === "circle") {
       ctx.beginPath();
-      ctx.arc(this.width / 2, this.height / 2, this.height / 2, 0, 2 * Math.PI);
+      ctx.arc(bb.startX + bb.width / 2, bb.startY + bb.height / 2, bb.height / 2, 0, 2 * Math.PI);
       ctx.fill();
       ctx.restore();
       return;
     }
 
     let roundRadius = this.ROUND_RADIUS;
-    const bb = this.getLabelBounds();
     const fold = this.getFoldInfo();
 
     if (this.labelProps.shape !== "rounded_rect") {
@@ -307,7 +413,7 @@ export class CustomCanvas extends fabric.Canvas {
         ctx.rect(
           bb.endX - roundRadius,
           bb.endY / 2 - this.TAIL_WIDTH / 2,
-          this.width - bb.endX + roundRadius,
+          this.labelWidth - bb.endX + roundRadius,
           this.TAIL_WIDTH,
         );
       } else if (this.labelProps.tailPos === "bottom") {
@@ -315,7 +421,7 @@ export class CustomCanvas extends fabric.Canvas {
           bb.endX / 2 - this.TAIL_WIDTH / 2,
           bb.endY - roundRadius,
           this.TAIL_WIDTH,
-          this.height - bb.endY + roundRadius,
+          this.labelHeight - bb.endY + roundRadius,
         );
       } else if (this.labelProps.tailPos === "left") {
         ctx.rect(
@@ -368,7 +474,7 @@ export class CustomCanvas extends fabric.Canvas {
           ctx.roundRect(x, bb.startY, segmentWidth, bb.height, roundRadius),
         ); // Other parts
       } else {
-        ctx.roundRect(0, 0, this.width, this.height, roundRadius);
+        ctx.roundRect(bb.startX, bb.startY, bb.width, bb.height, roundRadius);
       }
     } else {
       ctx.rect(bb.startX, bb.startY, bb.width, bb.height);

@@ -8,6 +8,10 @@ import { Toasts } from "$/utils/toasts";
 import { FileUtils } from "$/utils/file_utils";
 import { CanvasUtils } from "$/utils/canvas_utils";
 import { TextboxExt, TextboxExtProps } from "$/fabric-object/textbox-ext";
+import { CustomCanvas } from "$/fabric-object/custom_canvas";
+
+const canvasLabelWidth = (canvas: fabric.Canvas) =>
+  canvas instanceof CustomCanvas ? canvas.getLabelSize().width : (canvas.getWidth() ?? 240);
 
 export class LabelDesignerObjectHelper {
   static async addSvg(canvas: fabric.Canvas, svgCode: string): Promise<fabric.FabricObject | fabric.Group> {
@@ -87,6 +91,7 @@ export class LabelDesignerObjectHelper {
     const obj = new TextboxExt(text ?? "Text", {
       ...OBJECT_DEFAULTS_TEXT,
       ...options,
+      width: options?.width ?? Math.max(96, Math.round(canvasLabelWidth(canvas) * 0.7)),
     });
     canvas.add(obj);
     canvas.centerObject(obj);
@@ -138,7 +143,7 @@ export class LabelDesignerObjectHelper {
 
   static addQrCode(canvas: fabric.Canvas): QRCode {
     const qr = new QRCode({
-      text: "NiimBlue",
+      text: "Pressmark",
       ...OBJECT_SIZE_DEFAULTS,
       ...OBJECT_DEFAULTS,
     });

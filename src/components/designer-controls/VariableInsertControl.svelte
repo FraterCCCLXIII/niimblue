@@ -4,6 +4,7 @@
   import QRCode from "$/fabric-object/qrcode";
   import Barcode from "$/fabric-object/barcode";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
 
   interface Props {
     selectedObject: fabric.FabricObject;
@@ -32,7 +33,11 @@
 </script>
 
 <div class="btn-group btn-group-sm" role="group" title={$tr("params.variables.insert")}>
-  <button class="btn btn-sm btn-secondary dropdown-toggle" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+  <button
+    class="btn btn-sm btn-secondary dropdown-toggle"
+    data-bs-toggle="dropdown"
+    data-bs-auto-close="outside"
+    use:fixedDropdown>
     <MdIcon icon="data_object" />
   </button>
 

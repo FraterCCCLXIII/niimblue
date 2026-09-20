@@ -3,6 +3,7 @@
   import { DEFAULT_LABEL_PRESETS } from "$/defaults";
   import type { LabelPreset, LabelProps } from "$/types";
   import { applyLabelDimensions, formatPresetSize, labelPropsFromPreset } from "$/utils/label_geometry";
+  import { normalizeLabelPrintDirection } from "$/utils/label_template";
   import { LocalStoragePersistence } from "$/utils/persistence";
   import { tr } from "$/utils/i18n";
 
@@ -30,21 +31,23 @@
   const create = () => {
     if (useCustom) {
       onCreate(
-        applyLabelDimensions({
-          width: customWidth,
-          height: customHeight,
-          unit: "mm",
-          dpmm: 8,
-          printDirection: customWidth >= customHeight ? "left" : "top",
-          shape: "rounded_rect",
-        }),
+        normalizeLabelPrintDirection(
+          applyLabelDimensions({
+            width: customWidth,
+            height: customHeight,
+            unit: "mm",
+            dpmm: 8,
+            printDirection: customWidth >= customHeight ? "left" : "top",
+            shape: "rounded_rect",
+          }),
+        ),
         `${customWidth}×${customHeight}mm`,
       );
       return;
     }
 
     const preset = presets[selectedIndex] ?? DEFAULT_LABEL_PRESETS[0];
-    onCreate(labelPropsFromPreset(preset), preset.title ?? formatPresetSize(preset));
+    onCreate(normalizeLabelPrintDirection(labelPropsFromPreset(preset)), preset.title ?? formatPresetSize(preset));
   };
 </script>
 
@@ -104,8 +107,8 @@
   }
 
   .preset-item.is-active {
-    border-color: #ff4d4f;
-    background: #fff1f0;
+    border-color: var(--ws-accent, #4c9aff);
+    background: var(--ws-active, #eef5ff);
   }
 
   .preset-item span {

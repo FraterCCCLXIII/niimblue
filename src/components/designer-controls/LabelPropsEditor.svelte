@@ -21,6 +21,7 @@
   import { FileUtils } from "$/utils/file_utils";
   import { z } from "zod";
   import DpiSelector from "$/components/designer-controls/DpiSelector.svelte";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
 
   interface Props {
     labelProps: LabelProps;
@@ -268,7 +269,7 @@
 </script>
 
 <div class="dropdown">
-  <button class="btn btn-sm btn-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+  <button class="btn btn-sm btn-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside" use:fixedDropdown>
     <MdIcon icon="settings" />
   </button>
   <div class="dropdown-menu">

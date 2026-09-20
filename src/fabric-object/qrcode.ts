@@ -19,6 +19,8 @@ export const qrCodeDefaultValues: Partial<fabric.TClassProperties<QRCode>> = {
   fill: "#ffffff",
   mode: "Byte",
   qrVersion: 0,
+  originX: "left",
+  originY: "top",
   ...OBJECT_SIZE_DEFAULTS,
 };
 
@@ -117,8 +119,8 @@ export class QRCode<
     }
 
     ctx.save();
-    ctx.translate(-qrWidth / 2, -qrWidth / 2); // make top-left origin
-    ctx.translate(-0.5, -0.5); // blurry rendering fix
+    ctx.translate(-qrWidth / 2, -qrWidth / 2);
+    ctx.translate(-0.5, -0.5);
     qr.renderTo2dContext(ctx, qrScale);
     ctx.restore();
 

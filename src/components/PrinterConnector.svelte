@@ -18,6 +18,7 @@
   import { tr, type TranslationKey } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import { Toasts } from "$/utils/toasts";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
   import { onMount } from "svelte";
   import { LocalStoragePersistence } from "$/utils/persistence";
   import type { AppIconName } from "$/utils/lucide_icons";
@@ -150,6 +151,7 @@
     class:is-connecting={connecting}
     data-bs-toggle="dropdown"
     data-bs-auto-close={connected ? "outside" : true}
+    use:fixedDropdown
     disabled={connecting || (!connected && !hasTransport)}
     aria-haspopup="menu">
     {#if connected}

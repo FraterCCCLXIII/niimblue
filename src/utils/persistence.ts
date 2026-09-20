@@ -8,6 +8,7 @@ import {
   PrintCountMapSchema,
   PrintHistoryEntrySchema,
   RecentLabelEntrySchema,
+  WorkspaceSessionSchema,
   type AutomationProps,
   type ConnectionType,
   type ExportedLabelTemplate,
@@ -17,6 +18,7 @@ import {
   type PrintCountMap,
   type PrintHistoryEntry,
   type RecentLabelEntry,
+  type WorkspaceSession,
 } from "$/types";
 import { z } from "zod";
 import { FileUtils } from "$/utils/file_utils";
@@ -179,6 +181,29 @@ export class LocalStoragePersistence {
       }
     });
     return { zodErrors, otherErrors };
+  }
+
+  static renameLabel(id: string, title: string): boolean {
+    const nextTitle = title.trim();
+    if (!id || !nextTitle) {
+      return false;
+    }
+
+    const labels = this.loadLabels();
+    const current = labels.find((item) => item.id === id);
+    if (!current) {
+      return false;
+    }
+
+    try {
+      this.validateAndSaveObject(id, { ...current, title: nextTitle }, ExportedLabelTemplateSchema.omit({ id: true }));
+      this.savePrintHistory(
+        this.loadPrintHistory().map((entry) => (entry.sourceId === id ? { ...entry, title: nextTitle } : entry)),
+      );
+      return true;
+    } catch {
+      return false;
+    }
   }
 
   /**
@@ -371,5 +396,34 @@ export class LocalStoragePersistence {
     counts[id] = (counts[id] ?? 0) + by;
     this.validateAndSaveObject("print_counts", counts, PrintCountMapSchema);
     return counts[id];
+  }
+
+  static loadWorkspaceSession(): WorkspaceSession | null {
+    try {
+      const raw = sessionStorage.getItem("workspace_session");
+      if (!raw) {
+        return null;
+      }
+      return WorkspaceSessionSchema.parse(JSON.parse(raw));
+    } catch {
+      return null;
+    }
+  }
+
+  static saveWorkspaceSession(session: WorkspaceSession) {
+    try {
+      const compact = JSON.parse(
+        JSON.stringify({
+          ...session,
+          tabs: session.tabs.map((tab) => ({
+            ...tab,
+            snapshot: { ...tab.snapshot, thumbnailBase64: undefined },
+          })),
+        }),
+      ) as WorkspaceSession;
+      sessionStorage.setItem("workspace_session", JSON.stringify(compact));
+    } catch (error) {
+      console.warn("Workspace session was not saved:", error);
+    }
   }
 }

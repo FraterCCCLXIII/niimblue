@@ -3,6 +3,7 @@
   import type { AppIconName } from "$/utils/lucide_icons";
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
   import IconPicker from "$/components/designer-controls/IconPicker.svelte";
   import CsvControl from "$/components/designer-controls/CsvControl.svelte";
   import PdfImportButton from "$/components/designer-controls/PdfImportButton.svelte";
@@ -53,7 +54,7 @@
   };
 </script>
 
-<aside class="designer-side">
+<CustomScroll class="designer-side">
   <h3>{$tr("editor.elements")}</h3>
   <div class="element-grid">
     {#each tiles as tile (tile.type)}
@@ -79,7 +80,7 @@
     <CsvControl bind:enabled={csvEnabled} onPlaceholderPicked={onCsvPlaceholderPicked} />
     <p>{$tr("editor.data_source.help")}</p>
   </div>
-</aside>
+</CustomScroll>
 
 <style>
   .tile-embed {

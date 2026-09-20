@@ -29,11 +29,11 @@ import {
 import { Toasts } from "$/utils/toasts";
 import { tr } from "$/utils/i18n";
 import { LocalStoragePersistence, writablePersisted } from "$/utils/persistence";
-import { APP_CONFIG_DEFAULTS, CSV_DEFAULT, OBJECT_DEFAULTS_TEXT } from "$/defaults";
+import { APP_CONFIG_DEFAULTS, APP_FONTS, CSV_DEFAULT } from "$/defaults";
 import z from "zod";
 import { FileUtils } from "$/utils/file_utils";
 
-export const fontCache = writable<string[]>([OBJECT_DEFAULTS_TEXT.fontFamily]);
+export const fontCache = writable<string[]>([...APP_FONTS]);
 export const appConfig = writablePersisted<AppConfig>("config", AppConfigSchema, APP_CONFIG_DEFAULTS);
 export const userIcons = writablePersisted<UserIcon[]>("user_icons", z.array(UserIconSchema), []);
 export const userFonts = writablePersisted<UserFont[]>("user_fonts", z.array(UserFontSchema), []);

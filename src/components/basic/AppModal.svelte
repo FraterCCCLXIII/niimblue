@@ -1,6 +1,7 @@
 <script lang="ts">
   import Modal from "bootstrap/js/dist/modal";
   import { onDestroy, onMount, type Snippet } from "svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
 
   interface Props {
     show: boolean;
@@ -53,7 +54,9 @@
       </div>
 
       <div class="modal-body">
-        {@render children()}
+        <CustomScroll class="workspace-modal__scroll">
+          {@render children()}
+        </CustomScroll>
       </div>
 
       {#if footer}

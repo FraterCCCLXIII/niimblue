@@ -1,23 +1,14 @@
 <div align="center">
 
-[![logo](about/logo.svg)](https://niim.blue)
+# Pressmark
 
-# NIIMBOT printers webui
+Design and print labels from your desktop or browser.
 
-Design and print labels right from your browser
+[Repository](https://github.com/FraterCCCLXIII/pressmark)
 
-[FAQ](https://github.com/MultiMote/niimblue/wiki/Frequently-asked-questions) | [Discord](https://discord.gg/jXPAfZVd8a) | [Telegram](https://t.me/niimblue) |  [NIIMBOT Community Wiki](https://printers.niim.blue)
+Pressmark is based on [NiimBlue](https://github.com/MultiMote/niimblue) and uses [NiimBlueLib](https://github.com/MultiMote/niimbluelib) for printer communication.
 
-[NiimBlueLib](https://github.com/MultiMote/niimbluelib) is used for communication
-
-Deployments:
-
-[niim.blue](https://niim.blue) ![de](https://github.com/user-attachments/assets/07e72fdf-dd32-47a6-9071-43e77e9be7fa) main | [dev.niim.blue](https://dev.niim.blue) ![de](https://github.com/user-attachments/assets/07e72fdf-dd32-47a6-9071-43e77e9be7fa) dev | [2.niim.blue](https://2.niim.blue) ![ru](https://github.com/user-attachments/assets/b85647b0-4fb3-4b39-9da0-c31ec171067c) main
-
-Support project:
-
-[Boosty](https://boosty.to/multimote) | [Lava](https://app.lava.top/mithriss_art?tabId=donate) (less fees)
-
+Upstream community: [FAQ](https://github.com/MultiMote/niimblue/wiki/Frequently-asked-questions) · [Discord](https://discord.gg/jXPAfZVd8a) · [NIIMBOT Community Wiki](https://printers.niim.blue)
 
 </div>
 
@@ -27,9 +18,10 @@ Support project:
 * Support for both Bluetooth and USB connections.
 * Rich label editor. Label saving, import/export.
 * Print preview. You can see how your label will look like after post-processing. Several post-processing algorithms are available.
-* [Standalone apps](https://github.com/MultiMote/niimblue/releases):
-    - Android (Capacitor based)
-    - Windows (Tauri based, uses Edge backed)
+* Standalone apps:
+    - Desktop (Electron)
+    - Android (Capacitor)
+    - Windows (Tauri, Edge-backed)
 * Most complete implementation of [NIIMBOT protocol](https://printers.niim.blue/interfacing/proto/).
 
 You can see more complete list of implemented and planned features [on the Wiki](https://github.com/MultiMote/niimblue/wiki#features).
@@ -114,7 +106,7 @@ Skip steps you have done.
 3. Clone repository
 
     ```bash
-    git clone https://github.com/MultiMote/niimblue.git
+    git clone https://github.com/FraterCCCLXIII/pressmark.git
     ```
 
 4. Install dependencies

@@ -2,6 +2,7 @@
   import type { ExportedLabelTemplate, LabelProps } from "$/types";
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
 
   interface Props {
     onItemClicked: (index: number) => void;
@@ -46,7 +47,8 @@
   };
 </script>
 
-<div class="labels-browser overflow-y-auto border d-flex p-2 gap-1 flex-wrap {className}">
+<CustomScroll class="labels-browser border {className}">
+  <div class="d-flex p-2 gap-1 flex-wrap">
   {#each labels as item, idx (item.id ?? item.timestamp)}
     <div
       tabindex="0"
@@ -93,13 +95,19 @@
       </div>
     </div>
   {/each}
-</div>
+  </div>
+</CustomScroll>
 
 <style>
   .labels-browser {
+    height: auto;
     max-height: 200px;
     max-width: 100%;
     min-height: 96px;
+  }
+
+  .labels-browser :global(.ws-scroll__view) {
+    max-height: 200px;
   }
 
   .card-wrapper {

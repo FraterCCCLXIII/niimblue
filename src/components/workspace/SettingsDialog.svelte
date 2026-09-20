@@ -29,13 +29,13 @@
       <dl class="settings-meta">
         <div>
           <dt>{$tr("settings.app")}</dt>
-          <dd>NiimBlue</dd>
+          <dd>Pressmark</dd>
         </div>
         {#if commit}
           <div>
             <dt>{$tr("settings.commit")}</dt>
             <dd>
-              <a href="https://github.com/MultiMote/niimblue/commit/{commit}" target="_blank" rel="noreferrer">
+              <a href="https://github.com/FraterCCCLXIII/pressmark/commit/{commit}" target="_blank" rel="noreferrer">
                 {commit.slice(0, 7)}
               </a>
             </dd>
@@ -50,7 +50,7 @@
         <div>
           <dt>{$tr("main.code")}</dt>
           <dd>
-            <a href="https://github.com/MultiMote/niimblue" target="_blank" rel="noreferrer">GitHub</a>
+            <a href="https://github.com/FraterCCCLXIII/pressmark" target="_blank" rel="noreferrer">GitHub</a>
           </dd>
         </div>
       </dl>

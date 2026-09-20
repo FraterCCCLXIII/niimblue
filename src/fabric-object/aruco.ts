@@ -178,7 +178,7 @@ export class ArUcoMarker<
 
     ctx.save();
     ctx.translate(-Math.floor(markerWidth / 2), -Math.floor(markerWidth / 2));
-    ctx.translate(-0.5, -0.5); // blurry rendering fix
+    ctx.translate(-0.5, -0.5);
 
     // black background (border + black cells)
     ctx.fillStyle = "black";

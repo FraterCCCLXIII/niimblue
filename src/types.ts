@@ -82,6 +82,21 @@ export const ExportedLabelTemplateSchema = z.object({
   csv: CsvParamsSchema.optional(),
 });
 
+export const WorkspaceTabStateSchema = z.object({
+  id: z.string(),
+  title: z.string(),
+  sourceId: z.string().optional(),
+  snapshot: ExportedLabelTemplateSchema,
+  csvEnabled: z.boolean(),
+});
+
+export const WorkspaceSessionSchema = z.object({
+  view: z.enum(["library", "editor"]),
+  section: z.enum(["recent", "mine", "history", "catalog"]),
+  tabs: z.array(WorkspaceTabStateSchema),
+  activeTabId: z.string().nullable(),
+});
+
 const [firstTask, ...otherTasks] = printTaskNames;
 
 export const PrintHistoryEntrySchema = z.object({
@@ -161,6 +176,8 @@ export type LabelProps = z.infer<typeof LabelPropsSchema>;
 export type LabelPreset = z.infer<typeof LabelPresetSchema>;
 export type FabricJson = z.infer<typeof FabricJsonSchema>;
 export type ExportedLabelTemplate = z.infer<typeof ExportedLabelTemplateSchema>;
+export type WorkspaceTabState = z.infer<typeof WorkspaceTabStateSchema>;
+export type WorkspaceSession = z.infer<typeof WorkspaceSessionSchema>;
 export type PreviewPropsOffset = z.infer<typeof PreviewPropsOffsetSchema>;
 export type PreviewProps = z.infer<typeof PreviewPropsSchema>;
 export type AutomationProps = z.infer<typeof AutomationPropsSchema>;

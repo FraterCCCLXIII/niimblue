@@ -11,16 +11,16 @@ let pendingSelect;
 const enableHardwareApis = () => {
   app.commandLine.appendSwitch("enable-experimental-web-platform-features");
   app.commandLine.appendSwitch("enable-web-bluetooth");
-  app.commandLine.appendSwitch("enable-features", "WebBluetooth,WebBluetoothNewPermissionsBackend");
+  app.commandLine.appendSwitch("enable-features", "WebBluetooth,WebBluetoothNewPermissionsBackend,FontAccess");
 };
 
 const grantDevicePermissions = () => {
   const ses = session.defaultSession;
   ses.setPermissionCheckHandler((_webContents, permission) =>
-    ["serial", "bluetooth", "hid", "clipboard-read", "notifications"].includes(permission),
+    ["serial", "bluetooth", "hid", "clipboard-read", "notifications", "local-fonts"].includes(permission),
   );
   ses.setPermissionRequestHandler((_webContents, permission, callback) => {
-    callback(["serial", "bluetooth", "hid", "clipboard-read", "notifications", "media"].includes(permission));
+    callback(["serial", "bluetooth", "hid", "clipboard-read", "notifications", "media", "local-fonts"].includes(permission));
   });
   ses.setDevicePermissionHandler(() => true);
 };
@@ -95,7 +95,7 @@ const createWindow = () => {
     height: 840,
     minWidth: 900,
     minHeight: 640,
-    title: "NiimBlue",
+    title: "Pressmark",
     backgroundColor: "#ffffff",
     frame: false,
     titleBarStyle: process.platform === "darwin" ? "hidden" : "default",

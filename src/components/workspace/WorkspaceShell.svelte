@@ -1,8 +1,16 @@
 <script lang="ts">
-  import { tick } from "svelte";
+  import { onMount, tick } from "svelte";
   import LabelDesigner from "$/components/LabelDesigner.svelte";
   import TemplateLibrary from "$/components/workspace/TemplateLibrary.svelte";
-  import type { LibrarySection } from "$/components/workspace/TemplateLibrary.svelte";
+  import {
+    type AppRoute,
+    type LibrarySection,
+    isShareHash,
+    navigateApp,
+    parseAppRoute,
+    settingsHref,
+    subscribeAppRoute,
+  } from "$/utils/app_router";
   import CreateLabelDialog from "$/components/workspace/CreateLabelDialog.svelte";
   import WorkspaceTabBar from "$/components/workspace/WorkspaceTabBar.svelte";
   import PrinterConnector from "$/components/PrinterConnector.svelte";
@@ -11,36 +19,42 @@
   import DebugStuff from "$/components/DebugStuff.svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import { automation } from "$/stores";
-  import type { ExportedLabelTemplate, LabelProps } from "$/types";
+  import type { ExportedLabelTemplate, LabelProps, WorkspaceTabState } from "$/types";
   import { emptyLabelTemplate } from "$/utils/starter_templates";
   import { isStarterTemplate } from "$/utils/starter_templates";
   import { FileUtils } from "$/utils/file_utils";
   import { LocalStoragePersistence } from "$/utils/persistence";
+  import { cloneLabelTemplate } from "$/utils/label_template";
   import { tr } from "$/utils/i18n";
   import { getDesktop } from "$/utils/desktop";
-
-  interface TabState {
-    id: string;
-    title: string;
-    sourceId?: string;
-    snapshot: ExportedLabelTemplate;
-    csvEnabled: boolean;
-  }
+  import { Toasts } from "$/utils/toasts";
 
   // eslint-disable-next-line no-undef
   const appCommit = __APP_COMMIT__;
   // eslint-disable-next-line no-undef
   const buildDate = __BUILD_DATE__;
 
-  let view = $state<"library" | "editor">("library");
-  let section = $state<LibrarySection>("recent");
-  let tabs = $state<TabState[]>([]);
-  let activeTabId = $state<string | null>(null);
+  const restoredSession = LocalStoragePersistence.loadWorkspaceSession();
+  const bootRoute = parseAppRoute();
+
+  let view = $state<"library" | "editor">(
+    bootRoute?.name === "editor" ? "editor" : bootRoute?.name === "library" ? "library" : (restoredSession?.view ?? "library"),
+  );
+  let section = $state<LibrarySection>(bootRoute?.name === "library" ? bootRoute.section : (restoredSession?.section ?? "recent"));
+  let tabs = $state<WorkspaceTabState[]>(restoredSession?.tabs ?? []);
+  let activeTabId = $state<string | null>(
+    bootRoute?.name === "editor" && bootRoute.tabId && tabs.some((tab) => tab.id === bootRoute.tabId)
+      ? bootRoute.tabId
+      : (restoredSession?.activeTabId ?? null),
+  );
   let libraryRevision = $state(0);
   let createOpen = $state(false);
-  let debugStuffShow = $state(false);
-  let settingsOpen = $state(false);
+  let debugStuffShow = $state(bootRoute?.name === "debug");
+  let settingsOpen = $state(bootRoute?.name === "settings");
   let designer = $state<LabelDesigner | undefined>();
+  let lastContentRoute = $state<AppRoute>(
+    view === "editor" ? { name: "editor", tabId: activeTabId ?? undefined } : { name: "library", section },
+  );
 
   const activeTab = $derived(tabs.find((tab) => tab.id === activeTabId));
 
@@ -64,48 +78,100 @@
     );
   };
 
-  const showLibrary = () => {
-    snapshotDesigner();
-    view = "library";
-    libraryRevision += 1;
-  };
-
   const showEditor = async (tabId: string) => {
     activeTabId = tabId;
     view = "editor";
     await tick();
     const tab = tabs.find((item) => item.id === tabId);
     if (tab && designer) {
-      await designer.applyLabel(tab.snapshot, tab.csvEnabled);
+      try {
+        await designer.applyLabel(tab.snapshot, tab.csvEnabled);
+      } catch (error) {
+        Toasts.error(error);
+      }
     }
   };
 
-  const openLabel = async (label: ExportedLabelTemplate) => {
-    snapshotDesigner();
-    const cloned = structuredClone(label);
-    if (isStarterTemplate(cloned.id)) {
-      cloned.id = undefined;
-    }
-    const existing = cloned.id ? tabs.find((tab) => tab.sourceId === cloned.id) : undefined;
-    if (existing) {
-      await showEditor(existing.id);
+  const applyRoute = (route: AppRoute) => {
+    if (route.name === "settings") {
+      settingsOpen = true;
       return;
     }
-    const id = newTabId();
-    tabs = [
-      ...tabs,
-      {
-        id,
-        title: cloned.title || $tr("editor.untitled"),
-        sourceId: cloned.id,
-        snapshot: cloned,
-        csvEnabled: !!cloned.csv,
-      },
-    ];
-    if (cloned.id) {
-      LocalStoragePersistence.touchRecentLabel(cloned.id);
+    if (route.name === "debug") {
+      settingsOpen = false;
+      debugStuffShow = true;
+      return;
     }
-    await showEditor(id);
+    settingsOpen = false;
+    debugStuffShow = false;
+    lastContentRoute = route;
+    if (route.name === "library") {
+      snapshotDesigner();
+      section = route.section;
+      view = "library";
+      libraryRevision += 1;
+      return;
+    }
+    const tabId =
+      (route.tabId && tabs.some((tab) => tab.id === route.tabId) ? route.tabId : undefined) ??
+      (activeTabId && tabs.some((tab) => tab.id === activeTabId) ? activeTabId : undefined) ??
+      tabs[0]?.id;
+    if (!tabId) {
+      navigateApp({ name: "library", section }, "replace");
+      return;
+    }
+    if (route.tabId !== tabId) {
+      navigateApp({ name: "editor", tabId }, "replace");
+      return;
+    }
+    void showEditor(tabId);
+  };
+
+  const openLabel = async (label: ExportedLabelTemplate, options?: { print?: boolean }) => {
+    try {
+      snapshotDesigner();
+    } catch (error) {
+      console.error(error);
+    }
+    try {
+      const cloned = cloneLabelTemplate(label);
+      if (isStarterTemplate(cloned.id)) {
+        cloned.id = undefined;
+      }
+      const existing = cloned.id ? tabs.find((tab) => tab.sourceId === cloned.id) : undefined;
+      if (existing) {
+        navigateApp({ name: "editor", tabId: existing.id });
+        await showEditor(existing.id);
+        if (options?.print) {
+          await tick();
+          designer?.openPreview();
+        }
+        return;
+      }
+      const id = newTabId();
+      tabs = [
+        ...tabs,
+        {
+          id,
+          title: cloned.title || $tr("editor.untitled"),
+          sourceId: cloned.id,
+          snapshot: cloned,
+          csvEnabled: !!cloned.csv,
+        },
+      ];
+      if (cloned.id) {
+        LocalStoragePersistence.touchRecentLabel(cloned.id);
+      }
+      navigateApp({ name: "editor", tabId: id });
+      await showEditor(id);
+      if (options?.print) {
+        await tick();
+        designer?.openPreview();
+      }
+      persistSession();
+    } catch (error) {
+      Toasts.error(error);
+    }
   };
 
   const createLabel = async (label: LabelProps, title: string) => {
@@ -125,10 +191,10 @@
     }
     const next = tabs[index] ?? tabs[index - 1];
     if (next) {
-      await showEditor(next.id);
+      navigateApp({ name: "editor", tabId: next.id });
     } else {
       activeTabId = null;
-      view = "library";
+      navigateApp({ name: "library", section });
     }
   };
 
@@ -147,10 +213,115 @@
     }
   };
 
+  const renameActiveTab = (title: string) => {
+    const route = parseAppRoute();
+    const tabId = route?.name === "editor" ? (route.tabId ?? activeTabId) : activeTabId;
+    if (!tabId) {
+      return;
+    }
+    tabs = tabs.map((tab) =>
+      tab.id === tabId ? { ...tab, title, snapshot: { ...tab.snapshot, title } } : tab,
+    );
+  };
+
+  const onLabelRenamed = (id: string, title: string) => {
+    libraryRevision += 1;
+    tabs = tabs.map((tab) =>
+      tab.sourceId === id
+        ? { ...tab, title, snapshot: { ...tab.snapshot, title } }
+        : tab,
+    );
+    if (activeTab?.sourceId === id) {
+      designer?.setLabelTitle(title);
+    }
+  };
+
+  const persistSession = () => {
+    if (view === "editor") {
+      try {
+        snapshotDesigner();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    LocalStoragePersistence.saveWorkspaceSession({
+      view,
+      section,
+      tabs,
+      activeTabId,
+    });
+  };
+
   $effect(() => {
     if ($automation?.startPrint && tabs.length === 0) {
-      view = "editor";
+      navigateApp({ name: "editor" }, "replace");
     }
+  });
+
+  $effect(() => {
+    if (settingsOpen) {
+      return;
+    }
+    const route = parseAppRoute();
+    if (route?.name === "settings") {
+      navigateApp(lastContentRoute, "replace");
+    }
+  });
+
+  $effect(() => {
+    if (debugStuffShow) {
+      return;
+    }
+    const route = parseAppRoute();
+    if (route?.name === "debug") {
+      navigateApp(lastContentRoute, "replace");
+    }
+  });
+
+  $effect(() => {
+    LocalStoragePersistence.saveWorkspaceSession({
+      view,
+      section,
+      tabs,
+      activeTabId,
+    });
+  });
+
+  let needsDesignerRestore = view === "editor" && tabs.length > 0;
+
+  $effect(() => {
+    if (!needsDesignerRestore || !designer) {
+      return;
+    }
+    needsDesignerRestore = false;
+    const tabId = activeTabId && tabs.some((tab) => tab.id === activeTabId) ? activeTabId : tabs[0]?.id;
+    if (tabId) {
+      void showEditor(tabId);
+    } else {
+      navigateApp({ name: "library", section }, "replace");
+    }
+  });
+
+  onMount(() => {
+    const boot = parseAppRoute();
+    if (boot) {
+      applyRoute(boot);
+    } else if (!isShareHash()) {
+      navigateApp(
+        view === "editor" ? { name: "editor", tabId: activeTabId ?? undefined } : { name: "library", section },
+        "replace",
+      );
+    }
+    const onLeave = () => persistSession();
+    window.addEventListener("pagehide", onLeave);
+    window.addEventListener("beforeunload", onLeave);
+    const stopRoute = subscribeAppRoute(applyRoute);
+    return () => {
+      persistSession();
+      stopRoute();
+      window.removeEventListener("pagehide", onLeave);
+      window.removeEventListener("beforeunload", onLeave);
+    };
   });
 
   $effect(() => {
@@ -166,15 +337,14 @@
   <WorkspaceTabBar
     tabs={tabs.map((tab) => ({ id: tab.id, title: tab.title }))}
     {activeTabId}
+    librarySection={section}
     showHome={view === "library"}
-    onHome={showLibrary}
-    onSelect={(id) => showEditor(id)}
     onClose={closeTab}
     onCreate={() => (createOpen = true)}>
     <PrinterConnector />
-    <button type="button" class="workspace-icon-btn" title={$tr("settings.title")} onclick={() => (settingsOpen = true)}>
+    <a href={settingsHref()} class="workspace-icon-btn" title={$tr("settings.title")}>
       <MdIcon icon="settings" />
-    </button>
+    </a>
   </WorkspaceTabBar>
 
   <div class="px-3">
@@ -186,12 +356,23 @@
       <TemplateLibrary
         {section}
         revision={libraryRevision}
-        onSectionChange={(next) => (section = next)}
+        onSectionChange={(next) => navigateApp({ name: "library", section: next })}
         onCreate={() => (createOpen = true)}
-        onOpen={openLabel} />
+        openTemplate={openLabel}
+        {onLabelRenamed} />
     </div>
     <div class="workspace-panel" class:is-hidden={view !== "editor"}>
-      <LabelDesigner bind:this={designer} autoLoad={false} onSaved={onSaved} onUrlLoaded={openLabel} />
+      <LabelDesigner
+        bind:this={designer}
+        autoLoad={false}
+        onSaved={onSaved}
+        fileRenamed={renameActiveTab}
+        onUrlLoaded={openLabel}
+        onDeleted={() => {
+          if (activeTabId) {
+            void closeTab(activeTabId);
+          }
+        }} />
     </div>
   </div>
 
@@ -200,10 +381,7 @@
     bind:show={settingsOpen}
     commit={appCommit}
     {buildDate}
-    onDebug={() => {
-      settingsOpen = false;
-      debugStuffShow = true;
-    }} />
+    onDebug={() => navigateApp({ name: "debug" })} />
 
   {#if debugStuffShow}
     <DebugStuff bind:show={debugStuffShow} />

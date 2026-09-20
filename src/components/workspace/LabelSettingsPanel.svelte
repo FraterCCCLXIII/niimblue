@@ -2,6 +2,7 @@
   import type { LabelProps, LabelShape } from "$/types";
   import { DEFAULT_LABEL_PRESETS } from "$/defaults";
   import { applyLabelDimensions, DEFAULT_DPMM, formatPresetSize, labelSizeMm } from "$/utils/label_geometry";
+  import { normalizeLabelPrintDirection } from "$/utils/label_template";
   import { LocalStoragePersistence } from "$/utils/persistence";
   import { appConfig } from "$/stores";
   import { tr } from "$/utils/i18n";
@@ -37,21 +38,38 @@
 
   const applySize = (width = widthMm, height = heightMm) => {
     onChange(
-      applyLabelDimensions({
-        width,
-        height,
-        unit: "mm",
-        dpmm,
-        printDirection: labelProps.printDirection,
-        shape: labelProps.shape,
-        split: labelProps.split,
-        splitParts: labelProps.splitParts,
-        tailPos: labelProps.tailPos,
-        tailLength: labelProps.tailLength,
-        mirror: labelProps.mirror,
-      }),
+      normalizeLabelPrintDirection(
+        applyLabelDimensions({
+          width,
+          height,
+          unit: "mm",
+          dpmm,
+          printDirection: labelProps.printDirection,
+          shape: labelProps.shape,
+          split: labelProps.split,
+          splitParts: labelProps.splitParts,
+          tailPos: labelProps.tailPos,
+          tailLength: labelProps.tailLength,
+          mirror: labelProps.mirror,
+        }),
+      ),
     );
   };
+
+  const presetMatches = (preset: (typeof presets)[number]) => {
+    if (preset.unit === "mm") {
+      const size = labelSizeMm(labelProps, preset.dpmm);
+      return size.width === preset.width && size.height === preset.height;
+    }
+    return labelProps.size.width === preset.width && labelProps.size.height === preset.height;
+  };
+
+  const selectedPresetIndex = $derived.by(() => {
+    const exact = presets.findIndex(
+      (preset) => presetMatches(preset) && preset.printDirection === labelProps.printDirection,
+    );
+    return exact >= 0 ? exact : presets.findIndex(presetMatches);
+  });
 
   const applyPreset = (index: number) => {
     const preset = presets[index];
@@ -60,19 +78,21 @@
     }
     dpmm = preset.dpmm;
     onChange(
-      applyLabelDimensions({
-        width: preset.width,
-        height: preset.height,
-        unit: preset.unit,
-        dpmm: preset.dpmm,
-        printDirection: preset.printDirection,
-        shape: preset.shape,
-        split: preset.split,
-        splitParts: preset.splitParts,
-        tailPos: preset.tailPos,
-        tailLength: preset.tailLength,
-        mirror: preset.mirror,
-      }),
+      normalizeLabelPrintDirection(
+        applyLabelDimensions({
+          width: preset.width,
+          height: preset.height,
+          unit: preset.unit,
+          dpmm: preset.dpmm,
+          printDirection: preset.printDirection,
+          shape: preset.shape,
+          split: preset.split,
+          splitParts: preset.splitParts,
+          tailPos: preset.tailPos,
+          tailLength: preset.tailLength,
+          mirror: preset.mirror,
+        }),
+      ),
     );
   };
 
@@ -93,9 +113,14 @@
 
 <section class="insp-section">
   <h3 class="insp-heading">{$tr("editor.label_settings.paper")}</h3>
-  <select id="label-paper" class="insp-field insp-select" onchange={(e) => applyPreset(Number(e.currentTarget.value))}>
+  <select
+    id="label-paper"
+    class="insp-field insp-select"
+    value={selectedPresetIndex >= 0 ? String(selectedPresetIndex) : ""}
+    onchange={(e) => applyPreset(Number(e.currentTarget.value))}>
+    <option value="" disabled>{$tr("editor.label_settings.custom_paper")}</option>
     {#each presets as preset, index (preset.title ?? `${preset.width}x${preset.height}-${index}`)}
-      <option value={index}>{preset.title ?? formatPresetSize(preset)}</option>
+      <option value={String(index)}>{preset.title ?? formatPresetSize(preset)}</option>
     {/each}
   </select>
 </section>

@@ -4,6 +4,7 @@
   import { onDestroy, onMount, tick } from "svelte";
   import { appConfig, automation, connectionState, csvData, loadedFonts } from "$/stores";
   import {
+    ExportedLabelTemplateSchema,
     type ExportedLabelTemplate,
     type FabricJson,
     type LabelProps,
@@ -17,11 +18,12 @@
   import { Toasts } from "$/utils/toasts";
   import { UndoRedo, type UndoState } from "$/utils/undo_redo";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
   import PrintPreview from "$/components/PrintPreview.svelte";
   import { DEFAULT_LABEL_PROPS, GRID_SIZE, OBJECT_DEFAULTS } from "$/defaults";
   import { LabelDesignerUtils } from "$/utils/label_designer_utils";
   import SavedLabelsMenu from "$/components/designer-controls/SavedLabelsMenu.svelte";
-  import { CustomCanvas } from "$/fabric-object/custom_canvas";
+  import { ARTBOARD_CHROME_PAD, CustomCanvas } from "$/fabric-object/custom_canvas";
   import { CanvasUtils } from "$/utils/canvas_utils";
   import ElementPalette from "$/components/workspace/ElementPalette.svelte";
   import InspectorPanel from "$/components/workspace/InspectorPanel.svelte";
@@ -29,14 +31,19 @@
   import ObjectSettingsPanel from "$/components/workspace/ObjectSettingsPanel.svelte";
   import CanvasRulers from "$/components/workspace/CanvasRulers.svelte";
   import { DEFAULT_DPMM, rotateLabelProps } from "$/utils/label_geometry";
+  import { cloneLabelTemplate, normalizeLabelPrintDirection } from "$/utils/label_template";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
+  import RenameLabelDialog from "$/components/workspace/RenameLabelDialog.svelte";
 
   interface Props {
     autoLoad?: boolean;
     onSaved?: () => void;
+    fileRenamed?: (title: string) => void;
     onUrlLoaded?: (label: ExportedLabelTemplate) => void;
+    onDeleted?: () => void;
   }
 
-  let { autoLoad = true, onSaved, onUrlLoaded }: Props = $props();
+  let { autoLoad = true, onSaved, fileRenamed, onUrlLoaded, onDeleted }: Props = $props();
 
   let htmlCanvas: HTMLCanvasElement;
   let canvasStage: HTMLDivElement | undefined = $state();
@@ -60,6 +67,7 @@
   let savedId = $state<string | undefined>(undefined);
   let pendingLabel = $state<ExportedLabelTemplate | undefined>(undefined);
   let pendingCsvEnabled = $state<boolean | undefined>(undefined);
+  let renameOpen = $state(false);
 
   const undo = new UndoRedo();
 
@@ -73,12 +81,16 @@
 
   const loadLabelData = async (data: ExportedLabelTemplate) => {
     undo.paused = true;
-    onUpdateLabelProps(data.label);
+    onUpdateLabelProps(normalizeLabelPrintDirection(data.label));
     if (data.csv) {
       $csvData = data.csv;
       csvEnabled = true;
     }
-    await FileUtils.loadCanvasState(fabricCanvas!, data.canvas);
+    try {
+      await FileUtils.loadCanvasState(fabricCanvas!, data.canvas);
+    } catch (error) {
+      Toasts.error(error);
+    }
     undo.paused = false;
   };
 
@@ -162,7 +174,7 @@
     labelProps = newProps;
     fabricCanvas!.setDimensions(labelProps.size);
     fabricCanvas!.virtualZoom(fabricCanvas!.getVirtualZoom());
-    rulerRevision++;
+    requestAnimationFrame(centerArtboard);
     try {
       LocalStoragePersistence.saveLastLabelProps(labelProps);
       undo.push(fabricCanvas!, labelProps);
@@ -172,7 +184,7 @@
   };
 
   const exportCurrentLabel = (): ExportedLabelTemplate => {
-    const label = FileUtils.makeExportedLabel(fabricCanvas!, labelProps, csvEnabled);
+    const label = FileUtils.makeExportedLabel(fabricCanvas!, normalizeLabelPrintDirection(labelProps), csvEnabled);
     label.title = labelTitle || label.title;
     if (savedId) {
       label.id = savedId;
@@ -186,6 +198,10 @@
 
   export function getCsvEnabled(): boolean {
     return csvEnabled;
+  }
+
+  export function setLabelTitle(title: string) {
+    labelTitle = title;
   }
 
   export async function applyLabel(data: ExportedLabelTemplate, enableCsv?: boolean) {
@@ -235,10 +251,10 @@
     undo.push(fabricCanvas!, labelProps);
   };
 
-  const openPreview = () => {
+  export function openPreview() {
     printNow = false;
     previewOpened = true;
-  };
+  }
 
   const openPreviewAndPrint = () => {
     printNow = true;
@@ -298,6 +314,86 @@
     }
     undo.push(fabricCanvas!, labelProps);
     fabricCanvas!.clear();
+  };
+
+  const renameCurrentLabel = (title: string) => {
+    labelTitle = title;
+    if (savedId && !LocalStoragePersistence.renameLabel(savedId, title)) {
+      Toasts.error("Label rename error");
+    }
+    try {
+      onSaved?.();
+    } finally {
+      fileRenamed?.(title);
+    }
+  };
+
+  const duplicateCurrentLabel = () => {
+    if (!onUrlLoaded) {
+      return;
+    }
+    const copy = cloneLabelTemplate(exportCurrentLabel());
+    copy.id = undefined;
+    copy.timestamp = FileUtils.timestamp();
+    copy.title = `${copy.title || $tr("editor.untitled")} copy`;
+    onUrlLoaded(copy);
+  };
+
+  const deleteCurrentLabel = () => {
+    if (!confirm($tr("editor.delete.confirm"))) {
+      return;
+    }
+    if (savedId) {
+      const next = LocalStoragePersistence.loadLabels().filter((item) => item.id !== savedId);
+      LocalStoragePersistence.saveLabels(next);
+      savedId = undefined;
+      onSaved?.();
+    }
+    if (onDeleted) {
+      onDeleted();
+      return;
+    }
+    fabricCanvas?.clear();
+  };
+
+  const exportCurrentFile = () => {
+    try {
+      FileUtils.saveLabelAsJson(exportCurrentLabel());
+    } catch (error) {
+      Toasts.zodErrors(error, "Label export error:");
+    }
+  };
+
+  const importElementsFromFile = async () => {
+    if (!fabricCanvas) {
+      return;
+    }
+    try {
+      const contents = await FileUtils.pickAndReadSingleTextFile("json");
+      const label = ExportedLabelTemplateSchema.parse(JSON.parse(contents));
+      const source = label.canvas;
+      if (!source?.objects?.length) {
+        return;
+      }
+
+      const temp = new CustomCanvas(undefined, {
+        width: label.label.size.width,
+        height: label.label.size.height,
+        enableRetinaScaling: false,
+      });
+      await FileUtils.loadCanvasState(temp, source);
+      const imported = [...temp.getObjects()];
+      for (const obj of imported) {
+        temp.remove(obj);
+        fabricCanvas.add(obj);
+      }
+      temp.dispose();
+      fabricCanvas.requestRenderAll();
+      undo.push(fabricCanvas, labelProps);
+      Toasts.message($tr("editor.import.done"));
+    } catch (error) {
+      Toasts.zodErrors(error, "Label import error:");
+    }
   };
 
   const toggleGrid = () => {
@@ -379,6 +475,44 @@
     onUpdateLabelProps(rotateLabelProps(labelProps));
   };
 
+  const centerArtboard = () => {
+    const stage = canvasStage;
+    if (!stage) {
+      return;
+    }
+    stage.scrollLeft = Math.max(0, (stage.scrollWidth - stage.clientWidth) / 2);
+    stage.scrollTop = Math.max(0, (stage.scrollHeight - stage.clientHeight) / 2);
+    rulerRevision++;
+  };
+
+  const panArtboard = (dx: number, dy: number) => {
+    if (!canvasStage) {
+      return;
+    }
+    canvasStage.scrollLeft -= dx;
+    canvasStage.scrollTop -= dy;
+    rulerRevision++;
+  };
+
+  const artboardWheel = (node: HTMLElement) => {
+    const onWheel = (event: WheelEvent) => {
+      if (event.ctrlKey || event.metaKey) {
+        event.preventDefault();
+        if (event.deltaY > 0) {
+          fabricCanvas?.virtualZoomOut();
+        } else if (event.deltaY < 0) {
+          fabricCanvas?.virtualZoomIn();
+        }
+      }
+    };
+    node.addEventListener("wheel", onWheel, { passive: false, capture: true });
+    return {
+      destroy() {
+        node.removeEventListener("wheel", onWheel, true);
+      },
+    };
+  };
+
   const applyTypedZoom = () => {
     const parsed = Number.parseFloat(zoomInput.replace("%", "").trim());
     if (!Number.isFinite(parsed)) {
@@ -402,7 +536,7 @@
     try {
       const savedLabelProps = LocalStoragePersistence.loadLastLabelProps();
       if (savedLabelProps !== null) {
-        labelProps = savedLabelProps;
+        labelProps = normalizeLabelPrintDirection(savedLabelProps);
       }
     } catch (e) {
       Toasts.zodErrors(e, "Label parameters load error:");
@@ -418,8 +552,9 @@
       if (!zoomFocused) {
         zoomInput = String(Math.round(z * 100));
       }
-      rulerRevision++;
+      requestAnimationFrame(centerArtboard);
     };
+    fabricCanvas.onPan = panArtboard;
     fabricCanvas.setGridEnabled(!!$appConfig.gridEnabled);
 
     if (pendingLabel) {
@@ -435,7 +570,7 @@
     window.addEventListener("hashchange", loadLabelFromUrl);
 
     undo.push(fabricCanvas, labelProps);
-    rulerRevision++;
+    requestAnimationFrame(centerArtboard);
 
     // force close dropdowns on touch devices
     fabricCanvas.on("mouse:down", (): void => {
@@ -452,7 +587,10 @@
       }
     });
 
-    fabricCanvas.on("object:modified", (): void => {
+    fabricCanvas.on("object:modified", (e): void => {
+      if (e.target) {
+        CanvasUtils.bakeTextObjectScale(e.target);
+      }
       undo.push(fabricCanvas!, labelProps);
     });
 
@@ -464,16 +602,19 @@
       undo.push(fabricCanvas!, labelProps);
     });
 
-    fabricCanvas.on("selection:created", (e): void => {
-      selectedCount = e.selected?.length ?? 0;
-      selectedObject = e.selected?.length === 1 ? e.selected[0] : undefined;
+    const syncSelection = (selected?: fabric.FabricObject[]) => {
+      const active = fabricCanvas.getActiveObject();
+      selectedCount = selected?.length ?? 0;
+      selectedObject = active ?? (selected && selected.length > 0 ? selected[0] : undefined);
       editRevision++;
+    };
+
+    fabricCanvas.on("selection:created", (e): void => {
+      syncSelection(e.selected);
     });
 
     fabricCanvas.on("selection:updated", (e): void => {
-      selectedCount = e.selected?.length ?? 0;
-      selectedObject = e.selected?.length === 1 ? e.selected[0] : undefined;
-      editRevision++;
+      syncSelection(e.selected);
     });
 
     fabricCanvas.on("selection:cleared", (): void => {
@@ -540,6 +681,22 @@
   });
 
   $effect(() => {
+    const stage = canvasStage;
+    if (!stage) {
+      return;
+    }
+    const observer = new ResizeObserver(() => {
+      if (stage.clientWidth > 0 && stage.scrollWidth > stage.clientWidth) {
+        if (stage.scrollLeft === 0 && stage.scrollTop === 0) {
+          centerArtboard();
+        }
+      }
+    });
+    observer.observe(stage);
+    return () => observer.disconnect();
+  });
+
+  $effect(() => {
     fabricCanvas?.setLabelProps(labelProps);
   });
 
@@ -564,30 +721,72 @@
 
 <div class="image-editor designer-root">
   <div class="workspace-toolbar">
-    <button class="ws-btn ws-btn-ghost" disabled={undoState.undoDisabled} onclick={() => undo.undo()}>
-      <MdIcon icon="undo" />
-      {$tr("editor.recover")}
-    </button>
-    <button class="ws-btn ws-btn-ghost" disabled={undoState.redoDisabled} onclick={() => undo.redo()} title={$tr("editor.redo")}>
-      <MdIcon icon="redo" />
-    </button>
-    <button class="ws-btn ws-btn-ghost" onclick={clearCanvas} title={$tr("editor.clear")}>
-      <MdIcon icon="cancel_presentation" />
-    </button>
-    <SavedLabelsMenu canvas={fabricCanvas!} onRequestLabelTemplate={exportCurrentLabel} {onLoadRequested} {csvEnabled} />
-    <div class="workspace-toolbar__spacer"></div>
-    <button class="ws-btn" onclick={openPreview}>
-      <MdIcon icon="visibility" />
-      {$tr("editor.preview")}
-    </button>
-    <button class="ws-btn" onclick={saveCurrentLabel}>
-      <MdIcon icon="save" />
-      {$tr("editor.save")}
-    </button>
-    <button class="ws-btn ws-btn-primary" onclick={openPreviewAndPrint} disabled={$connectionState !== "connected"}>
-      <MdIcon icon="print" />
-      {$tr("editor.print")}
-    </button>
+    <div class="workspace-toolbar__side workspace-toolbar__side--left">
+      <SavedLabelsMenu canvas={fabricCanvas!} onRequestLabelTemplate={exportCurrentLabel} {onLoadRequested} {csvEnabled} />
+    </div>
+    <div class="workspace-toolbar__center">
+      <button class="ws-btn ws-btn-ghost" disabled={undoState.undoDisabled} onclick={() => undo.undo()}>
+        <MdIcon icon="undo" />
+        {$tr("editor.undo")}
+      </button>
+      <button class="ws-btn ws-btn-ghost" disabled={undoState.redoDisabled} onclick={() => undo.redo()}>
+        <MdIcon icon="redo" />
+        {$tr("editor.redo")}
+      </button>
+    </div>
+    <div class="workspace-toolbar__side workspace-toolbar__side--right">
+      <div class="dropdown">
+        <button
+          type="button"
+          class="ws-btn ws-btn-icon"
+          data-bs-toggle="dropdown"
+          data-bs-auto-close="true"
+          use:fixedDropdown
+          title={$tr("editor.more")}
+          aria-label={$tr("editor.more")}>
+          <MdIcon icon="more_horiz" />
+        </button>
+        <div class="dropdown-menu dropdown-menu-end">
+          <button type="button" class="dropdown-item" onclick={clearCanvas}>
+            <MdIcon icon="cancel_presentation" />
+            {$tr("editor.clear")}
+          </button>
+          <button type="button" class="dropdown-item" onclick={() => (renameOpen = true)}>
+            <MdIcon icon="edit" />
+            {$tr("editor.rename")}
+          </button>
+          <button type="button" class="dropdown-item" onclick={duplicateCurrentLabel}>
+            <MdIcon icon="content_copy" />
+            {$tr("editor.duplicate")}
+          </button>
+          <button type="button" class="dropdown-item" onclick={deleteCurrentLabel}>
+            <MdIcon icon="delete" />
+            {$tr("editor.delete")}
+          </button>
+          <div class="dropdown-divider"></div>
+          <button type="button" class="dropdown-item" onclick={exportCurrentFile}>
+            <MdIcon icon="download" />
+            {$tr("editor.export")}
+          </button>
+          <button type="button" class="dropdown-item" onclick={() => void importElementsFromFile()}>
+            <MdIcon icon="upload" />
+            {$tr("editor.import")}
+          </button>
+        </div>
+      </div>
+      <button class="ws-btn" onclick={openPreview}>
+        <MdIcon icon="visibility" />
+        {$tr("editor.preview")}
+      </button>
+      <button class="ws-btn" onclick={saveCurrentLabel}>
+        <MdIcon icon="save" />
+        {$tr("editor.save")}
+      </button>
+      <button class="ws-btn ws-btn-primary" onclick={openPreview} disabled={$connectionState !== "connected"}>
+        <MdIcon icon="print" />
+        {$tr("editor.print")}
+      </button>
+    </div>
   </div>
 
   <div class="designer-workspace">
@@ -600,19 +799,22 @@
       {zplImageReady}
       {pdfImageReady} />
 
-    <div class="designer-canvas-pane">
-      <div class="designer-canvas-stage" bind:this={canvasStage}>
-        <CanvasRulers
-          container={canvasStage}
-          target={canvasHost}
-          dpmm={DEFAULT_DPMM}
-          zoom={zoomRatio}
-          printDirection={labelProps.printDirection}
-          revision={rulerRevision} />
-        <div class="canvas-wrapper print-start-{labelProps.printDirection}" bind:this={canvasHost}>
-          <canvas bind:this={htmlCanvas}></canvas>
+    <div class="designer-canvas-pane" use:artboardWheel>
+      <CanvasRulers
+        container={canvasStage}
+        target={canvasHost}
+        originPad={ARTBOARD_CHROME_PAD}
+        dpmm={DEFAULT_DPMM}
+        zoom={zoomRatio}
+        printDirection={labelProps.printDirection}
+        revision={rulerRevision} />
+      <CustomScroll class="designer-canvas-stage" axis="both" bind:view={canvasStage}>
+        <div class="designer-canvas-world">
+          <div class="canvas-wrapper print-start-{labelProps.printDirection}" bind:this={canvasHost}>
+            <canvas bind:this={htmlCanvas}></canvas>
+          </div>
         </div>
-      </div>
+      </CustomScroll>
       <div class="designer-canvas-footer">
         <div class="zoom-control">
           <button
@@ -681,6 +883,8 @@
       labelTitle={labelTitle}
       sourceId={savedId} />
   {/if}
+
+  <RenameLabelDialog bind:show={renameOpen} value={labelTitle.trim() || $tr("editor.untitled")} onRename={renameCurrentLabel} />
 </div>
 
 <style>
@@ -695,18 +899,9 @@
   .canvas-wrapper {
     border: 0;
     background-color: transparent;
-    max-width: 100%;
-    max-height: 100%;
-    overflow: auto;
-  }
-  .canvas-wrapper.print-start-left {
-    border-left: 2px solid #ff4646;
-  }
-  .canvas-wrapper.print-start-top {
-    border-top: 2px solid #ff4646;
+    overflow: visible;
   }
   .canvas-wrapper canvas {
-    image-rendering: pixelated;
     display: block;
   }
 </style>

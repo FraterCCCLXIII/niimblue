@@ -4,6 +4,7 @@
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import ZplImportButton from "$/components/designer-controls/ZplImportButton.svelte";
   import PdfImportButton from "$/components/designer-controls/PdfImportButton.svelte";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
 
   interface Props {
     onSubmit: (i: OjectType) => void;
@@ -16,7 +17,7 @@
 </script>
 
 <div class="dropdown">
-  <button class="btn btn-sm btn-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+  <button class="btn btn-sm btn-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside" use:fixedDropdown>
     <MdIcon icon="format_shapes" />
     <MdIcon icon="add" />
   </button>

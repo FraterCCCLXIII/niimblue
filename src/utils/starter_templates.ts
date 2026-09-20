@@ -49,6 +49,8 @@ const qr = (draft: ObjectDraftInput): FabricObjectDraft => ({
   qrVersion: 0,
   fill: "#ffffff",
   stroke: "#000000",
+  originX: "left",
+  originY: "top",
   ...draft,
 });
 
@@ -56,6 +58,8 @@ const barcode = (draft: ObjectDraftInput): FabricObjectDraft => ({
   type: "Barcode",
   encoding: "CODE128B",
   fill: "black",
+  originX: "left",
+  originY: "top",
   ...draft,
 });
 
@@ -118,9 +122,9 @@ export function getStarterTemplates(): ExportedLabelTemplate[] {
       qr({ left: 230, top: 8, width: 80, height: 80, text: "{dt|YYYYMMDDHHmm}" }),
     ]),
     template("QR link", "general", vial40x20, [
-      qr({ left: 16, top: 24, width: 112, height: 112, text: "https://niim.blue" }),
+      qr({ left: 16, top: 24, width: 112, height: 112, text: "https://github.com/FraterCCCLXIII/pressmark" }),
       textbox({ left: 144, top: 36, width: 150, fontSize: 16, fontWeight: "bold", text: "Scan to open" }),
-      textbox({ left: 144, top: 72, width: 150, fontSize: 11, text: "niim.blue" }),
+      textbox({ left: 144, top: 72, width: 150, fontSize: 11, text: "Pressmark" }),
     ]),
   ];
 }

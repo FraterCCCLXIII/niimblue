@@ -1,12 +1,12 @@
 # Contributing
 
-Thank you for your interest in contributing to NiimBlue!
+Thank you for your interest in contributing to Pressmark!
 
 ## Key points
 
-- Use [dev](https://github.com/MultiMote/niimblue/tree/dev) branch as the base branch for your pull requests. It contains most recent changes. Do not submit pull requests directly to `main` to avoid conflicts.
+- Open pull requests against this repository's default branch.
 
-- Do not submit "Monster" pull requests like [this](https://github.com/MultiMote/niimblue/pull/101). It's very difficult to review. Instead, please break down your changes into smaller, focused pull requests.
+- Keep pull requests focused. Large mixed changes are hard to review.
 
 - Do not submit "format all files" pull requests.
 

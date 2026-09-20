@@ -3,26 +3,35 @@
   import { LocalStoragePersistence } from "$/utils/persistence";
   import { getStarterTemplates } from "$/utils/starter_templates";
   import { formatLabelSize } from "$/utils/label_geometry";
+  import { cloneLabelTemplate } from "$/utils/label_template";
+  import { isStarterTemplate } from "$/utils/starter_templates";
+  import { FileUtils } from "$/utils/file_utils";
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import TemplateCard from "$/components/workspace/TemplateCard.svelte";
+  import RenameLabelDialog from "$/components/workspace/RenameLabelDialog.svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
+  import { libraryHref, type LibrarySection } from "$/utils/app_router";
 
-  export type LibrarySection = "recent" | "mine" | "history" | "catalog";
+  export type { LibrarySection };
 
   interface Props {
     section: LibrarySection;
     revision: number;
     onSectionChange: (section: LibrarySection) => void;
     onCreate: () => void;
-    onOpen: (label: ExportedLabelTemplate) => void;
+    openTemplate: (label: ExportedLabelTemplate, options?: { print?: boolean }) => void;
+    onLabelRenamed?: (id: string, title: string) => void;
   }
 
-  let { section, revision, onSectionChange, onCreate, onOpen }: Props = $props();
+  let { section, revision, onSectionChange, onCreate, openTemplate, onLabelRenamed }: Props = $props();
 
-  let savedLabels = $state<ExportedLabelTemplate[]>([]);
-  let history = $state<PrintHistoryEntry[]>([]);
+  let savedLabels = $state.raw<ExportedLabelTemplate[]>([]);
+  let history = $state.raw<PrintHistoryEntry[]>([]);
   let printCounts = $state<Record<string, number>>({});
   let starters = getStarterTemplates();
+  let renameOpen = $state(false);
+  let renaming = $state<ExportedLabelTemplate | undefined>(undefined);
 
   const refresh = () => {
     savedLabels = LocalStoragePersistence.loadLabels();
@@ -69,8 +78,53 @@
           : $tr("library.empty.recent"),
   );
 
-  const deleteLabel = (index: number) => {
-    const next = savedLabels.filter((_, i) => i !== index);
+  const selectLabel = (label: ExportedLabelTemplate, options?: { print?: boolean }) => {
+    openTemplate(cloneLabelTemplate(label), options);
+  };
+
+  const exportLabel = (label: ExportedLabelTemplate) => {
+    FileUtils.saveLabelAsJson(cloneLabelTemplate(label));
+  };
+
+  const canDeleteLabel = (label: ExportedLabelTemplate) => !!label.id && !isStarterTemplate(label.id);
+  const canRenameLabel = (label: ExportedLabelTemplate) => canDeleteLabel(label);
+
+  const openRename = (label: ExportedLabelTemplate) => {
+    if (!canRenameLabel(label)) {
+      return;
+    }
+    renaming = label;
+    renameOpen = true;
+  };
+
+  const applyRename = (title: string) => {
+    const current = renaming;
+    const id = current?.id;
+    if (!current || !id || !canRenameLabel(current)) {
+      return;
+    }
+    if (!LocalStoragePersistence.renameLabel(id, title)) {
+      return;
+    }
+    onLabelRenamed?.(id, title);
+    refresh();
+  };
+
+  const duplicateLabel = (label: ExportedLabelTemplate) => {
+    const cloned = cloneLabelTemplate(label);
+    cloned.id = undefined;
+    cloned.timestamp = FileUtils.timestamp();
+    cloned.title = `${cloned.title || $tr("editor.untitled")} copy`;
+    const next = [...LocalStoragePersistence.loadLabels(), cloned];
+    LocalStoragePersistence.saveLabels(next);
+    refresh();
+  };
+
+  const deleteLabel = (label: ExportedLabelTemplate) => {
+    if (!canDeleteLabel(label)) {
+      return;
+    }
+    const next = savedLabels.filter((item) => item.id !== label.id);
     LocalStoragePersistence.saveLabels(next);
     refresh();
   };
@@ -81,7 +135,7 @@
     }
     const match = savedLabels.find((label) => label.id === entry.sourceId);
     if (match) {
-      onOpen(match);
+      selectLabel(match);
     }
   };
 </script>
@@ -92,41 +146,25 @@
       <MdIcon icon="add" />
       {$tr("library.create")}
     </button>
-    <button
-      type="button"
-      class="library-nav__item"
-      class:is-active={section === "recent"}
-      onclick={() => onSectionChange("recent")}>
+    <a class="library-nav__item" class:is-active={section === "recent"} href={libraryHref("recent")}>
       <MdIcon icon="schedule" />
       {$tr("library.recent")}
-    </button>
-    <button
-      type="button"
-      class="library-nav__item"
-      class:is-active={section === "mine"}
-      onclick={() => onSectionChange("mine")}>
+    </a>
+    <a class="library-nav__item" class:is-active={section === "mine"} href={libraryHref("mine")}>
       <MdIcon icon="folder" />
       {$tr("library.my_templates")}
-    </button>
-    <button
-      type="button"
-      class="library-nav__item"
-      class:is-active={section === "history"}
-      onclick={() => onSectionChange("history")}>
+    </a>
+    <a class="library-nav__item" class:is-active={section === "history"} href={libraryHref("history")}>
       <MdIcon icon="history" />
       {$tr("library.print_history")}
-    </button>
-    <button
-      type="button"
-      class="library-nav__item"
-      class:is-active={section === "catalog"}
-      onclick={() => onSectionChange("catalog")}>
+    </a>
+    <a class="library-nav__item" class:is-active={section === "catalog"} href={libraryHref("catalog")}>
       <MdIcon icon="widgets" />
       {$tr("library.catalog")}
-    </button>
+    </a>
   </aside>
 
-  <section class="library-main">
+  <CustomScroll class="library-main">
     <h2>{heading}</h2>
 
     {#if section === "history"}
@@ -160,7 +198,12 @@
     {:else if visibleLabels.length === 0 && section === "recent"}
       <div class="template-grid">
         {#each starters as label (label.id)}
-          <TemplateCard {label} onOpen={() => onOpen(label)} />
+          <TemplateCard
+            {label}
+            onSelect={() => selectLabel(label)}
+            onDuplicate={() => duplicateLabel(label)}
+            onExport={() => exportLabel(label)}
+            onPrint={() => selectLabel(label, { print: true })} />
         {/each}
       </div>
     {:else if visibleLabels.length === 0}
@@ -171,10 +214,19 @@
           <TemplateCard
             {label}
             printCount={label.id ? printCounts[label.id] ?? 0 : 0}
-            onOpen={() => onOpen(label)}
-            onDelete={section === "mine" ? () => deleteLabel(index) : undefined} />
+            onSelect={() => selectLabel(label)}
+            onRename={canRenameLabel(label) ? () => openRename(label) : undefined}
+            onDuplicate={() => duplicateLabel(label)}
+            onDelete={canDeleteLabel(label) ? () => deleteLabel(label) : undefined}
+            onExport={() => exportLabel(label)}
+            onPrint={() => selectLabel(label, { print: true })} />
         {/each}
       </div>
     {/if}
-  </section>
+  </CustomScroll>
+
+  <RenameLabelDialog
+    bind:show={renameOpen}
+    value={renaming?.title?.trim() || $tr("editor.untitled")}
+    onRename={applyRename} />
 </div>

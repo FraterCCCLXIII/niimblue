@@ -2,10 +2,12 @@
   import { onDestroy, onMount } from "svelte";
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import CustomScroll from "$/components/basic/CustomScroll.svelte";
   import { appConfig, userIcons } from "$/stores";
   import { FileUtils } from "$/utils/file_utils";
   import { Toasts } from "$/utils/toasts";
   import { getLucidePackNames, lucideIconToSvg, lucideSearchKey } from "$/utils/lucide_icons";
+  import { fixedDropdown } from "$/utils/fixed_dropdown";
 
   interface Props {
     onSubmitSvg: (i: string) => void;
@@ -74,9 +76,8 @@
 </script>
 
 <div class="dropdown" bind:this={dropdown}>
-  <button class="btn btn-sm btn-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside">
+  <button class="btn btn-sm btn-secondary" data-bs-toggle="dropdown" data-bs-auto-close="outside" use:fixedDropdown>
     <MdIcon icon="emoji_emotions" />
-    <MdIcon icon="add" />
   </button>
 
   <div class="dropdown-menu">
@@ -98,7 +99,7 @@
         </select>
       </div>
 
-      <div class="icons mb-1">
+      <CustomScroll class="icons mb-1">
         {#if $appConfig.iconListMode === "both" || $appConfig.iconListMode === "user"}
           {#each $userIcons as { name, data } (name)}
             <button
@@ -116,7 +117,7 @@
             </button>
           {/each}
         {/if}
-      </div>
+      </CustomScroll>
 
       <div class="input-group input-group-sm mb-1">
         <button class="btn btn-outline-secondary" onclick={addOwn}>
@@ -145,8 +146,8 @@
     max-width: 450px;
   }
   .icons {
+    height: 240px;
     max-height: 400px;
-    overflow-y: scroll;
   }
   .user-icon img,
   .pack-icon :global(svg) {
