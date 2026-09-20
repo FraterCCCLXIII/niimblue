@@ -33,17 +33,19 @@
     pdfImageReady,
   }: Props = $props();
 
-  const tiles: { type: OjectType; icon: AppIconName; key: "text" | "image" | "barcode" | "qrcode" | "time" | "border" | "line" | "figure" | "sn" }[] = [
+  const tiles: { type: OjectType; icon: AppIconName; key: "text" | "image" | "barcode" | "qrcode" | "time" | "square" | "line" | "circle" | "sn" }[] = [
     { type: "text", icon: "title", key: "text" },
     { type: "image", icon: "image", key: "image" },
-    { type: "barcode", icon: "view_week", key: "barcode" },
-    { type: "qrcode", icon: "qr_code_2", key: "qrcode" },
-    { type: "time", icon: "schedule", key: "time" },
-    { type: "rectangle", icon: "border_all", key: "border" },
     { type: "line", icon: "horizontal_rule", key: "line" },
-    { type: "circle", icon: "radio_button_unchecked", key: "figure" },
+    { type: "circle", icon: "radio_button_unchecked", key: "circle" },
+    { type: "rectangle", icon: "border_all", key: "square" },
+    { type: "qrcode", icon: "qr_code_2", key: "qrcode" },
+    { type: "barcode", icon: "view_week", key: "barcode" },
     { type: "sn", icon: "123", key: "sn" },
+    { type: "time", icon: "schedule", key: "time" },
   ];
+  const leadTiles = tiles.slice(0, 2);
+  const remainingTiles = tiles.slice(2);
 
   const tileLabel = (key: (typeof tiles)[number]["key"]) => {
     if (key === "text") return $tr("editor.objectpicker.text");
@@ -51,9 +53,9 @@
     if (key === "barcode") return $tr("editor.objectpicker.barcode");
     if (key === "qrcode") return $tr("editor.objectpicker.qrcode");
     if (key === "time") return $tr("editor.elements.time");
-    if (key === "border") return $tr("editor.elements.border");
+    if (key === "square") return $tr("editor.elements.border");
     if (key === "line") return $tr("editor.objectpicker.line");
-    if (key === "figure") return $tr("editor.elements.figure");
+    if (key === "circle") return $tr("editor.elements.figure");
     return $tr("editor.elements.sn");
   };
 </script>
@@ -61,7 +63,7 @@
 <CustomScroll class="designer-side">
   <h3>{$tr("editor.elements")}</h3>
   <div class="element-grid">
-    {#each tiles as tile (tile.type)}
+    {#each leadTiles as tile (tile.type)}
       <button type="button" class="element-tile" onclick={() => onPick(tile.type)}>
         <MdIcon icon={tile.icon} />
         {tileLabel(tile.key)}
@@ -71,6 +73,12 @@
       <IconPicker onSubmitSvg={onSvgIconPicked} />
       <span>{$tr("editor.elements.icon")}</span>
     </div>
+    {#each remainingTiles as tile (tile.type)}
+      <button type="button" class="element-tile" onclick={() => onPick(tile.type)}>
+        <MdIcon icon={tile.icon} />
+        {tileLabel(tile.key)}
+      </button>
+    {/each}
     <div class="element-tile tile-embed">
       <PdfImportButton {labelProps} onImageReady={pdfImageReady} />
     </div>
