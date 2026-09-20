@@ -163,21 +163,30 @@ export class FileUtils {
       return out.toDataURL("image/png");
     }
 
+    const crop = source instanceof CustomCanvas ? source.getLabelExportCrop() : { left: 0, top: 0, width: source.width, height: source.height };
     return source.toDataURL({
-      width: source.width,
-      height: source.height,
-      left: 0,
-      top: 0,
-      multiplier: Math.max(2, (THUMBNAIL_HEIGHT * 2) / (source.height || 1)),
+      width: crop.width,
+      height: crop.height,
+      left: crop.left,
+      top: crop.top,
+      multiplier: Math.max(2, (THUMBNAIL_HEIGHT * 2) / (crop.height || 1)),
       format: "png",
     });
   }
 
   static makeExportedLabel(canvas: fabric.Canvas, labelProps: LabelProps, includeCsv: boolean): ExportedLabelTemplate {
     const thumbnailBase64 = FileUtils.makeLabelThumbnail(canvas);
+    const canvasJson = canvas.toJSON() as FabricJson & {
+      width?: number;
+      height?: number;
+      viewportTransform?: unknown;
+    };
+    delete canvasJson.width;
+    delete canvasJson.height;
+    delete canvasJson.viewportTransform;
 
     const tpl: ExportedLabelTemplate = {
-      canvas: canvas.toJSON(),
+      canvas: canvasJson,
       label: labelProps,
       thumbnailBase64,
       timestamp: FileUtils.timestamp(),
@@ -209,11 +218,12 @@ export class FileUtils {
   static saveCanvasAsPng(canvas: fabric.Canvas) {
     const timestamp = FileUtils.timestamp();
 
+    const crop = canvas instanceof CustomCanvas ? canvas.getLabelExportCrop() : { left: 0, top: 0, width: canvas.width, height: canvas.height };
     const url = canvas.toDataURL({
-      width: canvas.width,
-      height: canvas.height,
-      left: 0,
-      top: 0,
+      width: crop.width,
+      height: crop.height,
+      left: crop.left,
+      top: crop.top,
       format: "png",
       multiplier: 1,
     });

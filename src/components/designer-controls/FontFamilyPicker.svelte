@@ -238,19 +238,23 @@
     color: var(--ws-muted, #8a8a8a);
   }
 
-  .font-dropdown__list {
-    flex: 1;
+  /* CustomScroll is a child component, so list constraints must be :global. */
+  .font-dropdown :global(.font-dropdown__list) {
+    flex: 1 1 auto;
+    min-height: 0;
     height: auto;
     max-height: 248px;
     padding: 0;
   }
 
-  .font-dropdown__list :global(.ws-scroll__view) {
-    padding: 6px 0;
+  .font-dropdown :global(.ws-scroll__view) {
+    height: auto;
     max-height: 248px;
+    padding: 6px 0;
+    overscroll-behavior: contain;
   }
 
-  .font-dropdown__list :global(.dropdown-header) {
+  .font-dropdown :global(.dropdown-header) {
     margin: 4px 0 0;
     padding: 8px 12px 4px;
     font-size: 11px;
@@ -259,8 +263,8 @@
     text-transform: uppercase;
   }
 
-  .font-dropdown__list :global(.dropdown-item),
-  .font-dropdown__list :global(.dropdown-item-text) {
+  .font-dropdown :global(.dropdown-item),
+  .font-dropdown :global(.dropdown-item-text) {
     padding: 6px 12px;
     font-size: 13px;
     white-space: nowrap;

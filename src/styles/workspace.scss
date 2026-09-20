@@ -723,6 +723,12 @@ body {
   margin-top: 12px;
 }
 
+.insp-tools--stack {
+  flex-direction: column;
+  margin-top: 0;
+  margin-bottom: 12px;
+}
+
 .insp-group {
   display: flex;
   flex: 1;

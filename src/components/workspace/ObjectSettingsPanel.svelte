@@ -12,7 +12,7 @@
   import VectorParamsControls from "$/components/designer-controls/VectorParamsControls.svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import { tr } from "$/utils/i18n";
-  import { alignObjectsToEachOther, type ObjectAlign } from "$/utils/object_align";
+  import { alignObjects, type ObjectAlign } from "$/utils/object_align";
 
   interface Props {
     selectedObject?: fabric.FabricObject;
@@ -29,50 +29,30 @@
     if (!selectedObject) {
       return [] as fabric.FabricObject[];
     }
+    const active = selectedObject.canvas?.getActiveObjects();
+    if (active && active.length > 0) {
+      return active;
+    }
     if (selectedObject instanceof fabric.ActiveSelection) {
       return selectedObject.getObjects();
     }
     return [selectedObject];
   });
 
-  const primaryText = $derived(targets.length > 0 && targets.every((obj) => obj instanceof fabric.IText) ? (targets[0] as fabric.IText) : undefined);
+  const textTargets = $derived(targets.filter((obj): obj is fabric.IText => obj instanceof fabric.IText));
+  const primaryText = $derived(textTargets.length > 0 && textTargets.length === targets.length ? textTargets[0] : undefined);
   const primaryQr = $derived(targets.length === 1 && targets[0] instanceof QRCode ? targets[0] : undefined);
   const primaryAruco = $derived(targets.length === 1 && targets[0] instanceof ArUcoMarker ? targets[0] : undefined);
   const primaryBarcode = $derived(targets.length === 1 && targets[0] instanceof Barcode ? targets[0] : undefined);
   const showVariables = $derived(
-    !!primaryText || !!primaryQr || (primaryBarcode != null && primaryBarcode.encoding === "CODE128B"),
+    targets.length === 1 && (!!primaryText || !!primaryQr || (primaryBarcode != null && primaryBarcode.encoding === "CODE128B")),
   );
 
-  const syncTextStyles = () => {
-    if (primaryText && targets.length > 1) {
-      for (const obj of targets.slice(1)) {
-        if (!(obj instanceof fabric.IText)) {
-          continue;
-        }
-        obj.set({
-          fontFamily: primaryText.fontFamily,
-          fontSize: primaryText.fontSize,
-          fontWeight: primaryText.fontWeight,
-          fontStyle: primaryText.fontStyle,
-          underline: primaryText.underline,
-          fill: primaryText.fill,
-          textAlign: primaryText.textAlign,
-          originY: primaryText.originY,
-          charSpacing: primaryText.charSpacing,
-          lineHeight: primaryText.lineHeight,
-          backgroundColor: primaryText.backgroundColor,
-        });
-        obj.setCoords();
-      }
-    }
-    onValueUpdated();
-  };
-
   const alignSelection = (align: ObjectAlign) => {
-    if (targets.length < 2) {
+    if (targets.length === 0) {
       return;
     }
-    alignObjectsToEachOther(targets, align);
+    alignObjects(targets, align);
     onValueUpdated();
   };
 </script>
@@ -80,38 +60,8 @@
 {#if selectedCount === 0}
   <p class="object-empty">{$tr("editor.object_settings.empty")}</p>
 {:else if selectedObject}
-  {#if selectedCount > 1 && !primaryText}
-    <section class="insp-section">
-      <h3 class="insp-heading">{$tr("editor.object_settings.align")}</h3>
-      <div class="insp-tools">
-        <div class="insp-group">
-          <button type="button" title={$tr("params.text.align.left")} onclick={() => alignSelection("left")}>
-            <MdIcon icon="format_align_left" />
-          </button>
-          <button type="button" title={$tr("params.text.align.center")} onclick={() => alignSelection("center")}>
-            <MdIcon icon="format_align_center" />
-          </button>
-          <button type="button" title={$tr("params.text.align.right")} onclick={() => alignSelection("right")}>
-            <MdIcon icon="format_align_right" />
-          </button>
-        </div>
-        <div class="insp-group insp-group--compact">
-          <button type="button" title={$tr("params.text.vorigin.top")} onclick={() => alignSelection("top")}>
-            <MdIcon icon="vertical_align_top" />
-          </button>
-          <button type="button" title={$tr("params.text.vorigin.center")} onclick={() => alignSelection("middle")}>
-            <MdIcon icon="vertical_align_center" />
-          </button>
-          <button type="button" title={$tr("params.text.vorigin.bottom")} onclick={() => alignSelection("bottom")}>
-            <MdIcon icon="vertical_align_bottom" />
-          </button>
-        </div>
-      </div>
-    </section>
-  {/if}
-
   {#if primaryText}
-    <TextParamsControls selectedText={primaryText} {targets} {editRevision} valueUpdated={syncTextStyles} />
+    <TextParamsControls selectedText={primaryText} {textTargets} {editRevision} valueUpdated={onValueUpdated} />
   {/if}
 
   {#if primaryQr}
@@ -134,6 +84,34 @@
   {#if selectedCount === 1}
     <VectorParamsControls {selectedObject} {editRevision} valueUpdated={onValueUpdated} />
   {/if}
+
+  <section class="insp-section">
+    <h3 class="insp-heading">{$tr("editor.object_settings.align")}</h3>
+    <div class="insp-tools insp-tools--stack">
+      <div class="insp-group">
+        <button type="button" title={$tr("editor.object_settings.align.left")} onclick={() => alignSelection("left")}>
+          <MdIcon icon="align_horizontal_left" />
+        </button>
+        <button type="button" title={$tr("editor.object_settings.align.center")} onclick={() => alignSelection("center")}>
+          <MdIcon icon="align_horizontal_center" />
+        </button>
+        <button type="button" title={$tr("editor.object_settings.align.right")} onclick={() => alignSelection("right")}>
+          <MdIcon icon="align_horizontal_right" />
+        </button>
+      </div>
+      <div class="insp-group">
+        <button type="button" title={$tr("editor.object_settings.align.top")} onclick={() => alignSelection("top")}>
+          <MdIcon icon="align_vertical_top" />
+        </button>
+        <button type="button" title={$tr("editor.object_settings.align.middle")} onclick={() => alignSelection("middle")}>
+          <MdIcon icon="align_vertical_center" />
+        </button>
+        <button type="button" title={$tr("editor.object_settings.align.bottom")} onclick={() => alignSelection("bottom")}>
+          <MdIcon icon="align_vertical_bottom" />
+        </button>
+      </div>
+    </div>
+  </section>
 
   <section class="insp-section">
     <h3 class="insp-heading">{$tr("editor.object_settings.arrange")}</h3>

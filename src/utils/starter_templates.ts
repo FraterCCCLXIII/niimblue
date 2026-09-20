@@ -24,6 +24,7 @@ type FabricObjectDraft = {
   mode?: string;
   qrVersion?: number;
   encoding?: string;
+  scaleFactor?: number;
 };
 
 type ObjectDraftInput = Omit<FabricObjectDraft, "type"> & { type?: string };
@@ -108,13 +109,13 @@ export function getStarterTemplates(): ExportedLabelTemplate[] {
     ]),
     template("Inventory barcode", "warehouse", tag50x30, [
       textbox({ left: 16, top: 12, width: 360, fontSize: 16, fontWeight: "bold", text: "SKU-18420" }),
-      barcode({ left: 16, top: 48, width: 360, height: 90, text: "18420001234" }),
+      barcode({ left: 16, top: 48, height: 90, scaleFactor: 2, text: "18420001234" }),
       textbox({ left: 16, top: 150, width: 360, fontSize: 11, text: "Shelf B / Bin 12" }),
     ]),
     template("Name badge", "office", tag50x30, [
-      textbox({ left: 20, top: 36, width: 360, fontSize: 22, fontWeight: "bold", textAlign: "center", originX: "center", text: "Alex Rivera" }),
-      textbox({ left: 20, top: 90, width: 360, fontSize: 13, textAlign: "center", originX: "center", text: "Lab Technician" }),
-      textbox({ left: 20, top: 130, width: 360, fontSize: 11, textAlign: "center", originX: "center", text: "Building 3" }),
+      textbox({ left: 20, top: 36, width: 360, fontSize: 22, fontWeight: "bold", textAlign: "center", text: "Alex Rivera" }),
+      textbox({ left: 20, top: 90, width: 360, fontSize: 13, textAlign: "center", text: "Lab Technician" }),
+      textbox({ left: 20, top: 130, width: 360, fontSize: 11, textAlign: "center", text: "Building 3" }),
     ]),
     template("Date stamp", "office", strip40x12, [
       textbox({ left: 12, top: 10, width: 200, fontSize: 13, fontWeight: "bold", text: "Packed {dt|YYYY-MM-DD}" }),

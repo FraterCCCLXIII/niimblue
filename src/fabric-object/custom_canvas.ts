@@ -23,8 +23,20 @@ type FoldInfo = {
 };
 type MirrorInfo = { pos: fabric.Point; flip: boolean };
 
-/** Screen-space gutter around the label so selection handles are not clipped. */
-export const ARTBOARD_CHROME_PAD = 24;
+export type ArtboardFrame = {
+  originX: number;
+  originY: number;
+  width: number;
+  height: number;
+  zoom: number;
+};
+
+type SceneBounds = {
+  minX: number;
+  minY: number;
+  maxX: number;
+  maxY: number;
+};
 
 export class CustomCanvas extends fabric.Canvas {
   private labelProps: LabelProps = DEFAULT_LABEL_PROPS;
@@ -32,6 +44,8 @@ export class CustomCanvas extends fabric.Canvas {
   private labelHeight = 1;
   private artboardChrome = false;
   private refreshingArtboard = false;
+  private artboardRefreshQueued = false;
+  private artboardFrame: ArtboardFrame = { originX: 0, originY: 0, width: 1, height: 1, zoom: 1 };
   private readonly SEPARATOR_LINE_WIDTH = 2;
   private readonly ROUND_RADIUS = 10;
   private readonly TAIL_WIDTH = 40;
@@ -43,6 +57,7 @@ export class CustomCanvas extends fabric.Canvas {
   private virtualZoomRatio: number = 1;
   onZoomChange?: (zoom: number) => void;
   onPan?: (dx: number, dy: number) => void;
+  onArtboardFrame?: (next: ArtboardFrame, prev: ArtboardFrame, shift: { x: number; y: number }) => void;
 
   constructor(
     el?: string | HTMLCanvasElement,
@@ -51,6 +66,13 @@ export class CustomCanvas extends fabric.Canvas {
     super(el, { allowTouchScrolling: true, backgroundVpt: true, ...options });
     this.labelWidth = this.width || 1;
     this.labelHeight = this.height || 1;
+    this.artboardFrame = {
+      originX: 0,
+      originY: 0,
+      width: this.labelWidth,
+      height: this.labelHeight,
+      zoom: 1,
+    };
     this.artboardChrome = !!el && options?.enableRetinaScaling !== false;
     this.backgroundVpt = true;
     const wrapper = this.getElement()?.parentElement;
@@ -68,6 +90,21 @@ export class CustomCanvas extends fabric.Canvas {
       }
     });
     if (this.artboardChrome) {
+      for (const event of [
+        "object:added",
+        "object:removed",
+        "object:moving",
+        "object:scaling",
+        "object:rotating",
+        "object:skewing",
+        "object:modified",
+        "selection:created",
+        "selection:updated",
+        "selection:cleared",
+        "text:changed",
+      ] as const) {
+        this.on(event, () => this.queueArtboardRefresh());
+      }
       this.refreshArtboard();
     }
   }
@@ -178,21 +215,46 @@ export class CustomCanvas extends fabric.Canvas {
     }
   }
 
-  private artboardInset(): number {
-    if (!this.artboardChrome) {
-      return 0;
-    }
-    return ARTBOARD_CHROME_PAD / Math.max(this.virtualZoomRatio, 0.01);
-  }
-
   public getLabelSize(): { width: number; height: number } {
     return { width: this.labelWidth, height: this.labelHeight };
+  }
+
+  public getArtboardFrame(): ArtboardFrame {
+    return { ...this.artboardFrame };
+  }
+
+  /** CSS-pixel offset of the label origin from the canvas element. */
+  public getLabelOriginScreen(): { x: number; y: number } {
+    const zoom = this.virtualZoomRatio;
+    return {
+      x: this.viewportTransform[4] * zoom,
+      y: this.viewportTransform[5] * zoom,
+    };
+  }
+
+  /** Crop box for print/export so overflow stays on the designer only. */
+  public getLabelExportCrop(): { left: number; top: number; width: number; height: number } {
+    return {
+      left: this.artboardChrome ? this.viewportTransform[4] : 0,
+      top: this.artboardChrome ? this.viewportTransform[5] : 0,
+      width: this.labelWidth,
+      height: this.labelHeight,
+    };
   }
 
   public setLabelSize(width: number, height: number) {
     this.labelWidth = Math.max(1, width);
     this.labelHeight = Math.max(1, height);
     this.refreshArtboard();
+  }
+
+  override add(...objects: fabric.FabricObject[]) {
+    const result = super.add(...objects);
+    for (const obj of objects) {
+      obj.set({ dirty: true });
+    }
+    this.requestRenderAll();
+    return result;
   }
 
   override setDimensions(size: { width?: number | string; height?: number | string }, options?: { cssOnly?: boolean; backstoreOnly?: boolean }) {
@@ -224,17 +286,74 @@ export class CustomCanvas extends fabric.Canvas {
     return new fabric.Point(bounds.startX + bounds.width / 2, bounds.startY + bounds.height / 2);
   }
 
+  private queueArtboardRefresh() {
+    if (!this.artboardChrome || this.refreshingArtboard || this.artboardRefreshQueued) {
+      return;
+    }
+    this.artboardRefreshQueued = true;
+    queueMicrotask(() => {
+      this.artboardRefreshQueued = false;
+      this.refreshArtboard();
+    });
+  }
+
+  private sceneBounds(): SceneBounds {
+    const bounds: SceneBounds = {
+      minX: 0,
+      minY: 0,
+      maxX: this.labelWidth,
+      maxY: this.labelHeight,
+    };
+    const include = (left: number, top: number, right: number, bottom: number) => {
+      bounds.minX = Math.min(bounds.minX, left);
+      bounds.minY = Math.min(bounds.minY, top);
+      bounds.maxX = Math.max(bounds.maxX, right);
+      bounds.maxY = Math.max(bounds.maxY, bottom);
+    };
+
+    this.forEachObject((obj) => {
+      obj.setCoords();
+      const rect = obj.getBoundingRect();
+      include(rect.left, rect.top, rect.left + rect.width, rect.top + rect.height);
+    });
+
+    const active = this.getActiveObject();
+    if (active) {
+      active.setCoords();
+      const rect = active.getBoundingRect();
+      const chrome = selectionChromeForZoom(this.virtualZoomRatio);
+      const edge = chrome.padding + chrome.cornerSize / 2 + 1;
+      const top = chrome.padding + chrome.rotateOffset + chrome.cornerSize / 2 + 1;
+      include(rect.left - edge, rect.top - top, rect.left + rect.width + edge, rect.top + rect.height + edge);
+    }
+
+    return bounds;
+  }
+
   private refreshArtboard() {
     if (this.refreshingArtboard) {
       return;
     }
     this.refreshingArtboard = true;
-    const inset = this.artboardInset();
-    const width = this.labelWidth + inset * 2;
-    const height = this.labelHeight + inset * 2;
-    this.setViewportTransform([1, 0, 0, 1, inset, inset]);
+    const prev = this.artboardFrame;
+    const el = this.getElement();
+    const before = el?.getBoundingClientRect();
+
+    let originX = 0;
+    let originY = 0;
+    let width = this.labelWidth;
+    let height = this.labelHeight;
+    if (this.artboardChrome) {
+      const bounds = this.sceneBounds();
+      originX = -bounds.minX;
+      originY = -bounds.minY;
+      width = Math.max(1, bounds.maxX - bounds.minX);
+      height = Math.max(1, bounds.maxY - bounds.minY);
+    }
+
+    this.setViewportTransform([1, 0, 0, 1, originX, originY]);
     super.setDimensions({ width, height }, { backstoreOnly: true });
-    if (this.getElement()) {
+    if (el) {
       super.setDimensions(
         {
           width: `${width * this.virtualZoomRatio}px`,
@@ -243,8 +362,25 @@ export class CustomCanvas extends fabric.Canvas {
         { cssOnly: true },
       );
     }
+
+    const next: ArtboardFrame = {
+      originX,
+      originY,
+      width,
+      height,
+      zoom: this.virtualZoomRatio,
+    };
+    this.artboardFrame = next;
     this.refreshingArtboard = false;
     this.applySelectionChrome();
+
+    if (this.onArtboardFrame && before && el) {
+      const after = el.getBoundingClientRect();
+      this.onArtboardFrame(next, prev, {
+        x: after.left + next.originX * next.zoom - (before.left + prev.originX * prev.zoom),
+        y: after.top + next.originY * next.zoom - (before.top + prev.originY * prev.zoom),
+      });
+    }
   }
 
   private applySelectionChrome() {

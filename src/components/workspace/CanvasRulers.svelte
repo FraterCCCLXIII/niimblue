@@ -5,14 +5,15 @@
   interface Props {
     container?: HTMLElement;
     target?: HTMLElement;
-    originPad?: number;
+    originX?: number;
+    originY?: number;
     dpmm: number;
     zoom: number;
     printDirection: PrintDirection;
     revision?: number;
   }
 
-  let { container, target, originPad = 0, dpmm, zoom, printDirection, revision = 0 }: Props = $props();
+  let { container, target, originX = 0, originY = 0, dpmm, zoom, printDirection, revision = 0 }: Props = $props();
 
   const RULER = 20;
   let hCanvas: HTMLCanvasElement | undefined = $state();
@@ -26,12 +27,12 @@
     const cr = container.getBoundingClientRect();
     const tr = target.getBoundingClientRect();
     const dpr = window.devicePixelRatio || 1;
-    const originX = tr.left - cr.left + originPad;
-    const originY = tr.top - cr.top + originPad;
+    const originLeft = tr.left - cr.left + originX;
+    const originTop = tr.top - cr.top + originY;
     const pxPerMm = Math.max(dpmm * zoom, 0.01);
 
-    paintRuler(hCanvas, cr.width, RULER, dpr, originX, pxPerMm, "horizontal");
-    paintRuler(vCanvas, RULER, cr.height, dpr, originY, pxPerMm, "vertical");
+    paintRuler(hCanvas, cr.width, RULER, dpr, originLeft, pxPerMm, "horizontal");
+    paintRuler(vCanvas, RULER, cr.height, dpr, originTop, pxPerMm, "vertical");
   };
 
   const paintRuler = (
@@ -126,7 +127,8 @@
     void zoom;
     void revision;
     void printDirection;
-    void originPad;
+    void originX;
+    void originY;
     const stage = container;
     const canvas = target;
     const onScroll = () => draw();

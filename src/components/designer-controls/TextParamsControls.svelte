@@ -4,17 +4,33 @@
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import FontFamilyPicker from "$/components/designer-controls/FontFamilyPicker.svelte";
   import { TextboxExt } from "$/fabric-object/textbox-ext";
-  import { alignObjectsToEachOther } from "$/utils/object_align";
 
   interface Props {
     selectedText: fabric.IText;
-    targets?: fabric.FabricObject[];
+    textTargets?: fabric.IText[];
     editRevision: number;
     valueUpdated: () => void;
   }
 
-  let { selectedText, targets = [], editRevision, valueUpdated }: Props = $props();
-  const alignTogether = $derived(targets.length > 1);
+  let { selectedText, textTargets, editRevision, valueUpdated }: Props = $props();
+
+  const texts = () => (textTargets && textTargets.length > 0 ? textTargets : [selectedText]);
+
+  const apply = (patch: Record<string, unknown>) => {
+    for (const obj of texts()) {
+      obj.set(patch);
+      obj.setCoords();
+    }
+    valueUpdated();
+  };
+
+  const applyEach = (update: (obj: fabric.IText) => void) => {
+    for (const obj of texts()) {
+      update(obj);
+      obj.setCoords();
+    }
+    valueUpdated();
+  };
 
   const sizeMin = 1;
   const sizeMax = 999;
@@ -39,87 +55,67 @@
   );
 
   const setXAlign = (align: fabric.TextboxProps["textAlign"]) => {
-    if (alignTogether && align && align !== "justify") {
-      alignObjectsToEachOther(targets, align);
-    } else {
-      selectedText.set({ textAlign: align });
-    }
-    valueUpdated();
-  };
-
-  const setYAlign = (align: fabric.TOriginY) => {
-    if (alignTogether) {
-      alignObjectsToEachOther(targets, align === "center" ? "middle" : align);
-      valueUpdated();
-      return;
-    }
-    const pos = selectedText.getPointByOrigin("left", "top");
-    selectedText.set({ originY: align });
-    selectedText.setPositionByOrigin(pos, "left", "top");
-    valueUpdated();
+    apply({ textAlign: align });
   };
 
   const toggleBold = () => {
-    selectedText.fontWeight = selectedText.fontWeight === "bold" ? "normal" : "bold";
-    valueUpdated();
+    apply({ fontWeight: selectedText.fontWeight === "bold" ? "normal" : "bold" });
   };
 
   const toggleItalic = () => {
-    selectedText.fontStyle = selectedText.fontStyle === "italic" ? "normal" : "italic";
-    valueUpdated();
+    apply({ fontStyle: selectedText.fontStyle === "italic" ? "normal" : "italic" });
   };
 
   const toggleUnderline = () => {
-    selectedText.set({ underline: !selectedText.underline });
-    valueUpdated();
+    apply({ underline: !selectedText.underline });
   };
 
   const toggleFontAutoSize = () => {
-    if (selectedText instanceof TextboxExt) {
-      selectedText.set({ fontAutoSize: !selectedText.fontAutoSize });
-    }
-    valueUpdated();
+    const next = selectedText instanceof TextboxExt ? !selectedText.fontAutoSize : false;
+    applyEach((obj) => {
+      if (obj instanceof TextboxExt) {
+        obj.set({ fontAutoSize: next });
+      }
+    });
   };
 
   const updateFontFamily = (v: string) => {
-    selectedText.set({ fontFamily: v });
-    valueUpdated();
+    apply({ fontFamily: v });
+  };
+
+  const nextFontSize = (size: number, direction: 1 | -1) => {
+    if (direction > 0) {
+      return Math.min(size > 40 ? Math.round(size * 1.1) : size + 2, sizeMax);
+    }
+    return Math.max(size > 40 ? Math.round(size * 0.9) : size - 2, sizeMin);
   };
 
   const fontSizeUp = () => {
-    const size = selectedText.fontSize;
-    selectedText.set({ fontSize: Math.min(size > 40 ? Math.round(size * 1.1) : size + 2, sizeMax) });
-    valueUpdated();
+    applyEach((obj) => obj.set({ fontSize: nextFontSize(obj.fontSize, 1) }));
   };
 
   const fontSizeDown = () => {
-    const size = selectedText.fontSize;
-    selectedText.set({ fontSize: Math.max(size > 40 ? Math.round(size * 0.9) : size - 2, sizeMin) });
-    valueUpdated();
+    applyEach((obj) => obj.set({ fontSize: nextFontSize(obj.fontSize, -1) }));
   };
 
   const fontSizeChange = (v: number) => {
-    selectedText.set({ fontSize: isNaN(v) ? 1 : Math.min(Math.max(v, sizeMin), sizeMax) });
-    valueUpdated();
+    apply({ fontSize: isNaN(v) ? 1 : Math.min(Math.max(v, sizeMin), sizeMax) });
   };
 
   const setKerning = (next: number) => {
-    selectedText.set({ charSpacing: Math.max(-200, Math.min(200, next * 10)) });
-    valueUpdated();
+    apply({ charSpacing: Math.max(-200, Math.min(200, next * 10)) });
   };
 
   const setLineSpacing = (next: number) => {
-    selectedText.set({ lineHeight: Math.max(0.1, Math.min(10, 1 + next / 10)) });
-    valueUpdated();
+    apply({ lineHeight: Math.max(0.1, Math.min(10, 1 + next / 10)) });
   };
 
   const applyPrintColor = (color: string, reversed = isReversed) => {
     if (reversed) {
-      selectedText.set({ fill: "white", backgroundColor: color });
+      apply({ fill: "white", backgroundColor: color });
     } else {
-      selectedText.set({ fill: color, backgroundColor: "transparent" });
+      apply({ fill: color, backgroundColor: "transparent" });
     }
-    valueUpdated();
   };
 
   const toggleReverse = () => {
@@ -128,20 +124,21 @@
 
   const setTextDirection = (direction: "horizontal" | "vertical" | "rotate") => {
     const angle = direction === "vertical" ? 90 : direction === "rotate" ? 270 : 0;
-    selectedText.rotate(angle);
-    valueUpdated();
+    applyEach((obj) => obj.rotate(angle));
   };
 
   const textChanged = (value: string) => {
     selectedText.set({ text: value });
+    selectedText.setCoords();
     valueUpdated();
   };
 
   const splitChanged = (wrapByWord: boolean) => {
-    if (selectedText instanceof fabric.Textbox) {
-      selectedText.set({ splitByGrapheme: !wrapByWord });
-      valueUpdated();
-    }
+    applyEach((obj) => {
+      if (obj instanceof fabric.Textbox) {
+        obj.set({ splitByGrapheme: !wrapByWord });
+      }
+    });
   };
 </script>
 
@@ -179,21 +176,21 @@
     <div class="insp-group">
       <button
         type="button"
-        class:is-active={!alignTogether && selectedText.textAlign === "left"}
+        class:is-active={selectedText.textAlign === "left"}
         title={$tr("params.text.align.left")}
         onclick={() => setXAlign("left")}>
         <MdIcon icon="format_align_left" />
       </button>
       <button
         type="button"
-        class:is-active={!alignTogether && selectedText.textAlign === "center"}
+        class:is-active={selectedText.textAlign === "center"}
         title={$tr("params.text.align.center")}
         onclick={() => setXAlign("center")}>
         <MdIcon icon="format_align_center" />
       </button>
       <button
         type="button"
-        class:is-active={!alignTogether && selectedText.textAlign === "right"}
+        class:is-active={selectedText.textAlign === "right"}
         title={$tr("params.text.align.right")}
         onclick={() => setXAlign("right")}>
         <MdIcon icon="format_align_right" />
@@ -204,29 +201,6 @@
         title={$tr("params.text.align.justify")}
         onclick={() => setXAlign("justify")}>
         <MdIcon icon="format_align_justify" />
-      </button>
-    </div>
-    <div class="insp-group insp-group--compact">
-      <button
-        type="button"
-        class:is-active={!alignTogether && selectedText.originY === "top"}
-        title={$tr("params.text.vorigin.top")}
-        onclick={() => setYAlign("top")}>
-        <MdIcon icon="vertical_align_top" />
-      </button>
-      <button
-        type="button"
-        class:is-active={!alignTogether && selectedText.originY === "center"}
-        title={$tr("params.text.vorigin.center")}
-        onclick={() => setYAlign("center")}>
-        <MdIcon icon="vertical_align_center" />
-      </button>
-      <button
-        type="button"
-        class:is-active={!alignTogether && selectedText.originY === "bottom"}
-        title={$tr("params.text.vorigin.bottom")}
-        onclick={() => setYAlign("bottom")}>
-        <MdIcon icon="vertical_align_bottom" />
       </button>
     </div>
   </div>

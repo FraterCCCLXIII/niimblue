@@ -21,16 +21,22 @@
     "appId": "app.pressmark.desktop",
     "productName": "Pressmark",
     "directories": {
-      "output": "release"
+      "output": "release",
+      "buildResources": "build"
     },
+    "icon": "build/icon.png",
     "files": [
       "main.cjs",
       "preload.cjs",
       "picker.html",
       "picker-preload.cjs",
+      "build/icon.png",
+      "build/icon.icns",
+      "build/icon.ico",
       "www/**/*"
     ],
     "mac": {
+      "icon": "build/icon.icns",
       "category": "public.app-category.utilities",
       "target": [
         "dmg",

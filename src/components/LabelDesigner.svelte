@@ -23,7 +23,7 @@
   import { DEFAULT_LABEL_PROPS, GRID_SIZE, OBJECT_DEFAULTS } from "$/defaults";
   import { LabelDesignerUtils } from "$/utils/label_designer_utils";
   import SavedLabelsMenu from "$/components/designer-controls/SavedLabelsMenu.svelte";
-  import { ARTBOARD_CHROME_PAD, CustomCanvas } from "$/fabric-object/custom_canvas";
+  import { CustomCanvas } from "$/fabric-object/custom_canvas";
   import { CanvasUtils } from "$/utils/canvas_utils";
   import ElementPalette from "$/components/workspace/ElementPalette.svelte";
   import InspectorPanel from "$/components/workspace/InspectorPanel.svelte";
@@ -49,10 +49,10 @@
   let canvasStage: HTMLDivElement | undefined = $state();
   let canvasHost: HTMLDivElement | undefined = $state();
 
-  let fabricCanvas = $state<CustomCanvas>();
+  let fabricCanvas = $state.raw<CustomCanvas | undefined>();
   let labelProps = $state<LabelProps>(DEFAULT_LABEL_PROPS);
   let previewOpened = $state<boolean>(false);
-  let selectedObject = $state<fabric.FabricObject | undefined>(undefined);
+  let selectedObject = $state.raw<fabric.FabricObject | undefined>(undefined);
   let selectedCount = $state<number>(0);
   let editRevision = $state<number>(0);
   let printNow = $state<boolean>(false);
@@ -63,6 +63,7 @@
   let zoomInput = $state("100");
   let zoomFocused = $state(false);
   let rulerRevision = $state(0);
+  let labelOrigin = $state({ x: 0, y: 0 });
   let labelTitle = $state<string>("");
   let savedId = $state<string | undefined>(undefined);
   let pendingLabel = $state<ExportedLabelTemplate | undefined>(undefined);
@@ -168,6 +169,65 @@
       deleteSelected();
       return;
     }
+
+    // Ctrl + C
+    if (cmdOrCtrl && key === "c") {
+      if (copySelectionToClipboard()) {
+        e.preventDefault();
+      }
+      return;
+    }
+
+    // Ctrl + X
+    if (cmdOrCtrl && key === "x") {
+      if (copySelectionToClipboard()) {
+        e.preventDefault();
+        deleteSelected();
+        undo.push(fabricCanvas!, labelProps);
+      }
+      return;
+    }
+  };
+
+  const shouldHandleDesignerClipboard = () => {
+    if (!fabricCanvas || previewOpened || renameOpen) {
+      return false;
+    }
+    if (LabelDesignerUtils.isAnyInputFocused(fabricCanvas)) {
+      return false;
+    }
+    return document.querySelectorAll(".dropdown-menu.show").length === 0;
+  };
+
+  const copySelectionToClipboard = (data?: DataTransfer | null) => {
+    if (!fabricCanvas || !shouldHandleDesignerClipboard()) {
+      return false;
+    }
+    const objects = LabelDesignerUtils.serializeSelection(fabricCanvas);
+    if (!objects) {
+      return false;
+    }
+    LabelDesignerUtils.writeClipboardPayload(objects, data);
+    return true;
+  };
+
+  const onCopy = (event: ClipboardEvent) => {
+    if (!shouldHandleDesignerClipboard() || fabricCanvas!.getActiveObjects().length === 0) {
+      return;
+    }
+    event.preventDefault();
+    copySelectionToClipboard(event.clipboardData);
+  };
+
+  const onCut = (event: ClipboardEvent) => {
+    if (!shouldHandleDesignerClipboard() || fabricCanvas!.getActiveObjects().length === 0) {
+      return;
+    }
+    event.preventDefault();
+    if (copySelectionToClipboard(event.clipboardData)) {
+      deleteSelected();
+      undo.push(fabricCanvas!, labelProps);
+    }
   };
 
   const onUpdateLabelProps = (newProps: LabelProps) => {
@@ -241,7 +301,10 @@
   const onObjectPicked = (objectType: OjectType) => {
     const obj = LabelDesignerObjectHelper.addObject(fabricCanvas!, objectType);
     if (obj !== undefined) {
+      obj.set({ dirty: true });
+      obj.setCoords();
       fabricCanvas!.setActiveObject(obj);
+      fabricCanvas!.requestRenderAll();
       undo.push(fabricCanvas!, labelProps);
     }
   };
@@ -288,16 +351,21 @@
   };
 
   const onPaste = async (event: ClipboardEvent) => {
-    if (LabelDesignerUtils.isAnyInputFocused(fabricCanvas!)) {
-      return;
-    }
-
-    const openedDropdowns = document.querySelectorAll(".dropdown-menu.show");
-    if (openedDropdowns.length > 0) {
+    if (!shouldHandleDesignerClipboard()) {
       return;
     }
 
     if (event.clipboardData != null) {
+      const objects = LabelDesignerUtils.readClipboardObjects(event.clipboardData);
+      if (objects) {
+        event.preventDefault();
+        const pasted = await LabelDesignerUtils.pasteObjects(fabricCanvas!, objects);
+        if (pasted) {
+          undo.push(fabricCanvas!, labelProps);
+        }
+        return;
+      }
+
       event.preventDefault();
       const obj = await LabelDesignerObjectHelper.addObjectFromClipboard(fabricCanvas!, event.clipboardData);
 
@@ -552,9 +620,18 @@
       if (!zoomFocused) {
         zoomInput = String(Math.round(z * 100));
       }
+      labelOrigin = fabricCanvas!.getLabelOriginScreen();
       requestAnimationFrame(centerArtboard);
     };
     fabricCanvas.onPan = panArtboard;
+    fabricCanvas.onArtboardFrame = (next, prev, shift) => {
+      labelOrigin = { x: next.originX * next.zoom, y: next.originY * next.zoom };
+      if (prev.zoom === next.zoom && canvasStage && (shift.x !== 0 || shift.y !== 0)) {
+        canvasStage.scrollLeft += shift.x;
+        canvasStage.scrollTop += shift.y;
+      }
+      rulerRevision++;
+    };
     fabricCanvas.setGridEnabled(!!$appConfig.gridEnabled);
 
     if (pendingLabel) {
@@ -717,7 +794,7 @@
   });
 </script>
 
-<svelte:window bind:innerWidth={windowWidth} onkeydown={onKeyDown} onpaste={onPaste} />
+<svelte:window bind:innerWidth={windowWidth} onkeydown={onKeyDown} oncopy={onCopy} oncut={onCut} onpaste={onPaste} />
 
 <div class="image-editor designer-root">
   <div class="workspace-toolbar">
@@ -803,7 +880,8 @@
       <CanvasRulers
         container={canvasStage}
         target={canvasHost}
-        originPad={ARTBOARD_CHROME_PAD}
+        originX={labelOrigin.x}
+        originY={labelOrigin.y}
         dpmm={DEFAULT_DPMM}
         zoom={zoomRatio}
         printDirection={labelProps.printDirection}

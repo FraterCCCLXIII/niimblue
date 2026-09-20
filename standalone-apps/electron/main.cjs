@@ -1,5 +1,7 @@
-const { app, BrowserWindow, ipcMain, session, shell } = require("electron");
+const { app, BrowserWindow, ipcMain, nativeImage, session, shell } = require("electron");
 const path = require("node:path");
+
+const APP_ICON_PATH = path.join(__dirname, "build", "icon.png");
 
 const isDev = process.argv.includes("--dev") || !app.isPackaged;
 const PRINTER_NAME = /niim|b21|b1s|b3s|d110|d11|d101|d101s|b1\b|b3\b/i;
@@ -96,6 +98,7 @@ const createWindow = () => {
     minWidth: 900,
     minHeight: 640,
     title: "Pressmark",
+    icon: APP_ICON_PATH,
     backgroundColor: "#ffffff",
     frame: false,
     titleBarStyle: process.platform === "darwin" ? "hidden" : "default",
@@ -185,7 +188,20 @@ const notifyMaximized = (value) => {
 
 enableHardwareApis();
 
+const applyDockIcon = () => {
+  // BrowserWindow `icon` is ignored on macOS. In `electron . --dev` the process
+  // is stock Electron.app, so the Dock stays the default atom unless we set it.
+  if (process.platform !== "darwin" || !app.dock) {
+    return;
+  }
+  const image = nativeImage.createFromPath(APP_ICON_PATH);
+  if (!image.isEmpty()) {
+    app.dock.setIcon(image);
+  }
+};
+
 app.whenReady().then(() => {
+  applyDockIcon();
   grantDevicePermissions();
   createWindow();
 
