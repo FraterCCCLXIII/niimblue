@@ -15,6 +15,8 @@
     onPick: (type: OjectType) => void;
     onSvgIconPicked: (svg: string) => void;
     onCsvPlaceholderPicked: (name: string) => void;
+    onCsvImported?: () => void;
+    onCsvCleared?: () => void;
     zplImageReady: (img: Blob) => void;
     pdfImageReady: (img: HTMLCanvasElement) => void;
   }
@@ -25,6 +27,8 @@
     onPick,
     onSvgIconPicked,
     onCsvPlaceholderPicked,
+    onCsvImported,
+    onCsvCleared,
     zplImageReady,
     pdfImageReady,
   }: Props = $props();
@@ -77,8 +81,11 @@
 
   <h3 class="mt-4">{$tr("editor.data_source")}</h3>
   <div class="data-source">
-    <CsvControl bind:enabled={csvEnabled} onPlaceholderPicked={onCsvPlaceholderPicked} />
-    <p>{$tr("editor.data_source.help")}</p>
+    <CsvControl
+      bind:enabled={csvEnabled}
+      onPlaceholderPicked={onCsvPlaceholderPicked}
+      onImported={onCsvImported}
+      onCleared={onCsvCleared} />
   </div>
 </CustomScroll>
 
@@ -109,11 +116,5 @@
     display: flex;
     flex-direction: column;
     gap: 10px;
-  }
-
-  .data-source p {
-    color: var(--ws-muted);
-    font-size: 12px;
-    margin: 0;
   }
 </style>

@@ -34,6 +34,9 @@
   import { cloneLabelTemplate, normalizeLabelPrintDirection } from "$/utils/label_template";
   import { fixedDropdown } from "$/utils/fixed_dropdown";
   import RenameLabelDialog from "$/components/workspace/RenameLabelDialog.svelte";
+  import CsvPageStrip from "$/components/workspace/CsvPageStrip.svelte";
+  import { CSV_FIELD_MIME, csvVariableToken, parseCsvTable } from "$/utils/csv_source";
+  import { applyCsvPreview, cloneFabricJson, getCsvSource, serializeCanvasJson, setBoundText } from "$/utils/csv_preview";
 
   interface Props {
     autoLoad?: boolean;
@@ -41,9 +44,10 @@
     fileRenamed?: (title: string) => void;
     onUrlLoaded?: (label: ExportedLabelTemplate) => void;
     onDeleted?: () => void;
+    onBeforeUnmount?: () => void;
   }
 
-  let { autoLoad = true, onSaved, fileRenamed, onUrlLoaded, onDeleted }: Props = $props();
+  let { autoLoad = true, onSaved, fileRenamed, onUrlLoaded, onDeleted, onBeforeUnmount }: Props = $props();
 
   let htmlCanvas: HTMLCanvasElement;
   let canvasStage: HTMLDivElement | undefined = $state();
@@ -57,6 +61,9 @@
   let editRevision = $state<number>(0);
   let printNow = $state<boolean>(false);
   let csvEnabled = $state<boolean>(false);
+  let csvPage = $state(0);
+  let pageCanvases = $state<FabricJson[]>([]);
+  let csvPreviewRevision = $state(0);
   let windowWidth = $state<number>(0);
   let undoState = $state<UndoState>({ undoDisabled: false, redoDisabled: false });
   let zoomRatio = $state(1);
@@ -69,6 +76,7 @@
   let pendingLabel = $state<ExportedLabelTemplate | undefined>(undefined);
   let pendingCsvEnabled = $state<boolean | undefined>(undefined);
   let renameOpen = $state(false);
+  let ignoreNextPasteEvent = false;
 
   const undo = new UndoRedo();
 
@@ -86,9 +94,15 @@
     if (data.csv) {
       $csvData = data.csv;
       csvEnabled = true;
+      csvPage = data.csv.page ?? 0;
+      pageCanvases = (data.csv.pageCanvases ?? []).map((json) => cloneFabricJson(json));
     }
     try {
       await FileUtils.loadCanvasState(fabricCanvas!, data.canvas);
+      if (csvEnabled) {
+        alignPageCanvases(data.canvas);
+      }
+      refreshCsvPreview();
     } catch (error) {
       Toasts.error(error);
     }
@@ -98,6 +112,95 @@
   undo.onLabelUpdate = loadLabelData;
   undo.onStateUpdate = (state: UndoState) => {
     undoState = state;
+  };
+  undo.capture = () => (csvEnabled ? { csv: csvSnapshot() } : {});
+
+  const csvTable = $derived(parseCsvTable($csvData.data));
+  const csvColumns = $derived(csvEnabled ? csvTable.columns : []);
+  const csvRows = $derived(csvEnabled ? csvTable.rows : []);
+  const csvVariables = $derived(csvRows[csvPage] ?? {});
+
+  const refreshCsvPreview = () => {
+    if (!fabricCanvas) {
+      return;
+    }
+    applyCsvPreview(fabricCanvas, csvEnabled ? csvVariables : undefined);
+    csvPreviewRevision++;
+  };
+
+  const commitCurrentPage = () => {
+    if (!fabricCanvas || !csvEnabled || csvRows.length === 0) {
+      return;
+    }
+    const index = Math.max(0, Math.min(csvRows.length - 1, csvPage));
+    const next = pageCanvases.slice();
+    next[index] = serializeCanvasJson(fabricCanvas);
+    pageCanvases = next;
+  };
+
+  const alignPageCanvases = (template?: FabricJson) => {
+    if (!csvEnabled || csvRows.length === 0) {
+      pageCanvases = [];
+      return;
+    }
+    const source = template ?? (fabricCanvas ? serializeCanvasJson(fabricCanvas) : pageCanvases[0]);
+    if (!source) {
+      pageCanvases = [];
+      return;
+    }
+    pageCanvases = csvRows.map((_, index) => cloneFabricJson(pageCanvases[index] ?? source));
+    csvPage = Math.max(0, Math.min(pageCanvases.length - 1, csvPage));
+    pageCanvases[csvPage] = cloneFabricJson(source);
+  };
+
+  const csvSnapshot = (): ExportedLabelTemplate["csv"] => {
+    commitCurrentPage();
+    return {
+      ...$csvData,
+      page: csvPage,
+      pageCanvases: pageCanvases.map((json) => cloneFabricJson(json)),
+    };
+  };
+
+  const loadPageCanvas = async (index: number) => {
+    const json = pageCanvases[index];
+    if (!fabricCanvas || !json) {
+      refreshCsvPreview();
+      return;
+    }
+    await FileUtils.loadCanvasState(fabricCanvas, json);
+    discardSelection();
+    refreshCsvPreview();
+  };
+
+  const setCsvPage = (next: number) => {
+    if (csvRows.length === 0) {
+      csvPage = 0;
+      return;
+    }
+    const clamped = Math.max(0, Math.min(csvRows.length - 1, next));
+    if (clamped === csvPage) {
+      refreshCsvPreview();
+      return;
+    }
+    commitCurrentPage();
+    csvPage = clamped;
+    void loadPageCanvas(csvPage);
+  };
+
+  const onCsvImported = () => {
+    commitCurrentPage();
+    alignPageCanvases();
+    csvPage = 0;
+    void loadPageCanvas(0);
+    editRevision++;
+  };
+
+  const onCsvCleared = () => {
+    csvPage = 0;
+    pageCanvases = [];
+    refreshCsvPreview();
+    editRevision++;
   };
 
   const deleteSelected = () => {
@@ -187,6 +290,20 @@
       }
       return;
     }
+
+    // Ctrl + V — keep working after a page click, when the paste event is empty
+    if (cmdOrCtrl && key === "v") {
+      const objects = LabelDesignerUtils.peekClipboardObjects();
+      if (objects && shouldHandleDesignerClipboard()) {
+        e.preventDefault();
+        ignoreNextPasteEvent = true;
+        void pasteDesignerObjects(objects).finally(() => {
+          queueMicrotask(() => {
+            ignoreNextPasteEvent = false;
+          });
+        });
+      }
+    }
   };
 
   const shouldHandleDesignerClipboard = () => {
@@ -244,6 +361,9 @@
   };
 
   const exportCurrentLabel = (): ExportedLabelTemplate => {
+    if (csvEnabled) {
+      $csvData = csvSnapshot() ?? $csvData;
+    }
     const label = FileUtils.makeExportedLabel(fabricCanvas!, normalizeLabelPrintDirection(labelProps), csvEnabled);
     label.title = labelTitle || label.title;
     if (savedId) {
@@ -304,7 +424,7 @@
       obj.set({ dirty: true });
       obj.setCoords();
       fabricCanvas!.setActiveObject(obj);
-      fabricCanvas!.requestRenderAll();
+      refreshCsvPreview();
       undo.push(fabricCanvas!, labelProps);
     }
   };
@@ -330,27 +450,66 @@
       selectedObject.dirty = true;
       undo.push(fabricCanvas!, labelProps);
     }
+    applyCsvPreview(fabricCanvas!, csvEnabled ? csvVariables : undefined);
     fabricCanvas!.requestRenderAll();
 
     // trigger reactivity for controls
     editRevision++;
   };
 
-  const getCanvasForPreview = (): FabricJson => {
-    return fabricCanvas!.toJSON();
+  const getCanvasForPreview = (page?: number): FabricJson => {
+    if (page == null || page === csvPage || !pageCanvases[page]) {
+      return serializeCanvasJson(fabricCanvas!);
+    }
+    return cloneFabricJson(pageCanvases[page]);
   };
 
-  const onCsvPlaceholderPicked = (name: string) => {
-    const obj = LabelDesignerObjectHelper.addText(fabricCanvas!, `{${name}}`, {
+  const addCsvField = (name: string, pos?: { x: number; y: number }) => {
+    const token = csvVariableToken(name);
+    const obj = LabelDesignerObjectHelper.addText(fabricCanvas!, token, {
       textAlign: "left",
       originX: "left",
       originY: "top",
+      ...(pos ? { left: pos.x, top: pos.y } : {}),
     });
+    setBoundText(obj, token, csvVariables);
+    if ($csvData.printColumnNames) {
+      LabelDesignerObjectHelper.addStaticText(fabricCanvas!, name, {
+        left: obj.left,
+        top: (obj.top ?? 0) - 4,
+        originX: "left",
+        originY: "bottom",
+        fontSize: 10,
+        textAlign: "left",
+      });
+    }
     fabricCanvas!.setActiveObject(obj);
+    refreshCsvPreview();
     undo.push(fabricCanvas!, labelProps);
   };
 
+  const onCsvPlaceholderPicked = (name: string) => {
+    addCsvField(name);
+  };
+
+  const pasteDesignerObjects = async (objects: Record<string, unknown>[]) => {
+    if (!fabricCanvas) {
+      return false;
+    }
+    const pasted = await LabelDesignerUtils.pasteObjects(fabricCanvas, objects);
+    if (pasted) {
+      refreshCsvPreview();
+      undo.push(fabricCanvas, labelProps);
+      return true;
+    }
+    return false;
+  };
+
   const onPaste = async (event: ClipboardEvent) => {
+    if (ignoreNextPasteEvent) {
+      event.preventDefault();
+      return;
+    }
     if (!shouldHandleDesignerClipboard()) {
       return;
     }
@@ -359,10 +518,7 @@
       const objects = LabelDesignerUtils.readClipboardObjects(event.clipboardData);
       if (objects) {
         event.preventDefault();
-        const pasted = await LabelDesignerUtils.pasteObjects(fabricCanvas!, objects);
-        if (pasted) {
-          undo.push(fabricCanvas!, labelProps);
-        }
+        await pasteDesignerObjects(objects);
         return;
       }
 
@@ -371,6 +527,7 @@
 
       if (obj !== undefined) {
         fabricCanvas!.setActiveObject(obj);
+        refreshCsvPreview();
         undo.push(fabricCanvas!, labelProps);
       }
     }
@@ -708,6 +865,14 @@
       const dragEvt = e.e as DragEvent;
       dragEvt.preventDefault();
 
+      const field = dragEvt.dataTransfer?.getData(CSV_FIELD_MIME);
+      if (field) {
+        const canvas = fabricCanvas!;
+        const point = canvas.getScenePoint(dragEvt);
+        addCsvField(field, { x: point.x, y: point.y });
+        return;
+      }
+
       let dropped = false;
 
       if (dragEvt.dataTransfer?.files) {
@@ -725,6 +890,33 @@
         }
       }
     });
+
+    const boundEditors = new WeakSet<fabric.FabricObject>();
+    const bindCsvEditing = (obj?: fabric.FabricObject) => {
+      if (!obj || !(obj instanceof fabric.IText) || boundEditors.has(obj)) {
+        return;
+      }
+      boundEditors.add(obj);
+      obj.on("editing:entered", () => {
+        const source = getCsvSource(obj);
+        if (!source) {
+          return;
+        }
+        obj.set({ text: source });
+        const end = obj.text?.length ?? 0;
+        obj.selectionStart = end;
+        obj.selectionEnd = end;
+      });
+      obj.on("editing:exited", () => {
+        const source = obj.text ?? "";
+        setBoundText(obj, source, csvVariables);
+        refreshCsvPreview();
+        undo.push(fabricCanvas!, labelProps);
+      });
+    };
+
+    fabricCanvas.on("object:added", (e) => bindCsvEditing(e.target));
+    fabricCanvas.getObjects().forEach((obj) => bindCsvEditing(obj));
 
     fabricCanvas.on("object:scaling", (e): void => {
       if (!e.target) {
@@ -753,7 +945,12 @@
   });
 
   onDestroy(() => {
-    fabricCanvas!.dispose();
+    try {
+      onBeforeUnmount?.();
+    } catch (error) {
+      console.error(error);
+    }
+    fabricCanvas?.dispose();
     window.removeEventListener("hashchange", loadLabelFromUrl);
   });
 
@@ -791,6 +988,27 @@
     if ($loadedFonts) {
       renderOnFontsChanged();
     }
+  });
+
+  $effect(() => {
+    if (csvRows.length === 0) {
+      if (csvPage !== 0) {
+        csvPage = 0;
+      }
+      return;
+    }
+    if (csvPage > csvRows.length - 1) {
+      setCsvPage(csvRows.length - 1);
+    }
+  });
+
+  $effect(() => {
+    csvEnabled;
+    csvVariables;
+    if (!fabricCanvas) {
+      return;
+    }
+    applyCsvPreview(fabricCanvas, csvEnabled ? csvVariables : undefined);
   });
 </script>
 
@@ -873,10 +1091,13 @@
       onPick={onObjectPicked}
       {onSvgIconPicked}
       {onCsvPlaceholderPicked}
+      {onCsvImported}
+      {onCsvCleared}
       {zplImageReady}
       {pdfImageReady} />
 
-    <div class="designer-canvas-pane" use:artboardWheel>
+    <div class="designer-canvas-pane" class:has-page-strip={csvEnabled && csvRows.length > 0} use:artboardWheel>
+      <div class="designer-canvas-main">
       <CanvasRulers
         container={canvasStage}
         target={canvasHost}
@@ -932,6 +1153,16 @@
           {$tr("editor.rotate")}
         </button>
       </div>
+      </div>
+      {#if csvEnabled && csvRows.length > 0}
+        <CsvPageStrip
+          rows={csvRows}
+          page={csvPage}
+          {labelProps}
+          revision={csvPreviewRevision}
+          getTemplate={getCanvasForPreview}
+          onSelect={setCsvPage} />
+      {/if}
     </div>
 
     <InspectorPanel {selectedCount}>
@@ -943,6 +1174,8 @@
           {selectedObject}
           {selectedCount}
           {editRevision}
+          {csvColumns}
+          {csvVariables}
           onDelete={deleteSelected}
           onClone={cloneSelected}
           onValueUpdated={controlValueUpdated} />

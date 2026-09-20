@@ -94,7 +94,15 @@ export class LabelDesignerObjectHelper {
       width: options?.width ?? Math.max(96, Math.round(canvasLabelWidth(canvas) * 0.7)),
     });
     canvas.add(obj);
-    canvas.centerObject(obj);
+    if (options?.left != null || options?.top != null) {
+      obj.set({
+        left: options.left ?? obj.left,
+        top: options.top ?? obj.top,
+      });
+      obj.setCoords();
+    } else {
+      canvas.centerObject(obj);
+    }
     return obj;
   }
 
@@ -104,7 +112,15 @@ export class LabelDesignerObjectHelper {
       ...options,
     });
     canvas.add(obj);
-    canvas.centerObject(obj);
+    if (options?.left != null || options?.top != null) {
+      obj.set({
+        left: options.left ?? obj.left,
+        top: options.top ?? obj.top,
+      });
+      obj.setCoords();
+    } else {
+      canvas.centerObject(obj);
+    }
     return obj;
   }
 

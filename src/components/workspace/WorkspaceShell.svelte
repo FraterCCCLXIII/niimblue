@@ -78,10 +78,22 @@
     );
   };
 
-  const showEditor = async (tabId: string) => {
+  const showEditor = async (tabId: string, options?: { force?: boolean }) => {
+    const leaving = view === "editor" && !!activeTabId && activeTabId !== tabId;
+    if (leaving) {
+      try {
+        snapshotDesigner();
+      } catch (error) {
+        console.error(error);
+      }
+    }
+    const alreadyOpen = view === "editor" && activeTabId === tabId && !!designer && !options?.force;
     activeTabId = tabId;
     view = "editor";
     await tick();
+    if (alreadyOpen) {
+      return;
+    }
     const tab = tabs.find((item) => item.id === tabId);
     if (tab && designer) {
       try {
@@ -287,18 +299,20 @@
     });
   });
 
-  let needsDesignerRestore = view === "editor" && tabs.length > 0;
+  let attachedDesigner: LabelDesigner | undefined;
 
   $effect(() => {
-    if (!needsDesignerRestore || !designer) {
+    if (designer === attachedDesigner) {
       return;
     }
-    needsDesignerRestore = false;
-    const tabId = activeTabId && tabs.some((tab) => tab.id === activeTabId) ? activeTabId : tabs[0]?.id;
+    attachedDesigner = designer;
+    if (!designer || view !== "editor") {
+      return;
+    }
+    const tabId =
+      (activeTabId && tabs.some((tab) => tab.id === activeTabId) ? activeTabId : undefined) ?? tabs[0]?.id;
     if (tabId) {
-      void showEditor(tabId);
-    } else {
-      navigateApp({ name: "library", section }, "replace");
+      void showEditor(tabId, { force: true });
     }
   });
 
@@ -368,6 +382,7 @@
         onSaved={onSaved}
         fileRenamed={renameActiveTab}
         onUrlLoaded={openLabel}
+        onBeforeUnmount={snapshotDesigner}
         onDeleted={() => {
           if (activeTabId) {
             void closeTab(activeTabId);

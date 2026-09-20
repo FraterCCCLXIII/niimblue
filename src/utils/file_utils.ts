@@ -16,6 +16,7 @@ import { CanvasUtils } from "$/utils/canvas_utils";
 import { LocalStoragePersistence } from "./persistence";
 import { csvData, loadedFonts } from "$/stores";
 import { get } from "svelte/store";
+import { serializeCanvasJson } from "$/utils/csv_preview";
 
 export class FileUtils {
   static timestamp(): number {
@@ -176,7 +177,7 @@ export class FileUtils {
 
   static makeExportedLabel(canvas: fabric.Canvas, labelProps: LabelProps, includeCsv: boolean): ExportedLabelTemplate {
     const thumbnailBase64 = FileUtils.makeLabelThumbnail(canvas);
-    const canvasJson = canvas.toJSON() as FabricJson & {
+    const canvasJson = serializeCanvasJson(canvas) as FabricJson & {
       width?: number;
       height?: number;
       viewportTransform?: unknown;

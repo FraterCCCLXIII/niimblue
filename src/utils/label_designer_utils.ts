@@ -12,7 +12,6 @@ type DesignerClipboardPayload = {
 
 export class LabelDesignerUtils {
   private static clipboardSignature = "";
-  private static pasteGeneration = 0;
   private static lastClipboardObjects: Record<string, unknown>[] | undefined;
 
   static async cloneSelection(canvas: fabric.Canvas): Promise<void> {
@@ -42,9 +41,7 @@ export class LabelDesignerUtils {
     }
 
     canvas.add(...clonedList);
-
-    const newSelection = new fabric.ActiveSelection(clonedList);
-    canvas.setActiveObject(newSelection);
+    this.selectObjects(canvas, clonedList);
   }
 
   static moveSelection(
@@ -78,21 +75,41 @@ export class LabelDesignerUtils {
     });
   }
 
+  static selectObjects(canvas: fabric.Canvas, objects: fabric.FabricObject[]) {
+    if (objects.length === 0) {
+      canvas.discardActiveObject();
+      canvas.requestRenderAll();
+      return;
+    }
+    if (objects.length === 1) {
+      canvas.setActiveObject(objects[0]);
+    } else {
+      canvas.setActiveObject(new fabric.ActiveSelection(objects, { canvas }));
+    }
+    canvas.requestRenderAll();
+  }
+
   static serializeSelection(canvas: fabric.Canvas): Record<string, unknown>[] | undefined {
     const selected = canvas.getActiveObjects();
     if (selected.length === 0) {
       return;
     }
 
-    return selected.map((obj) => {
-      const json = obj.toObject() as Record<string, unknown> & { left: number; top: number };
-      const originX = (typeof json.originX === "string" ? json.originX : obj.originX) as fabric.TOriginX;
-      const originY = (typeof json.originY === "string" ? json.originY : obj.originY) as fabric.TOriginY;
-      const pos = obj.getPointByOrigin(originX, originY);
-      json.left = pos.x;
-      json.top = pos.y;
-      return json;
-    });
+    canvas.discardActiveObject();
+    try {
+      return selected.map((obj) => {
+        const json = obj.toObject() as Record<string, unknown> & { left: number; top: number; csvSource?: string };
+        if (typeof json.csvSource === "string") {
+          json.text = json.csvSource;
+        }
+        const pos = obj.getXY();
+        json.left = pos.x;
+        json.top = pos.y;
+        return json;
+      });
+    } finally {
+      this.selectObjects(canvas, selected);
+    }
   }
 
   static encodeClipboard(objects: Record<string, unknown>[]): string {
@@ -116,7 +133,6 @@ export class LabelDesignerUtils {
 
   static rememberClipboard(objects: Record<string, unknown>[]) {
     this.clipboardSignature = JSON.stringify(objects);
-    this.pasteGeneration = 0;
     this.lastClipboardObjects = objects;
   }
 
@@ -135,6 +151,10 @@ export class LabelDesignerUtils {
     void navigator.clipboard?.writeText(payload);
   }
 
+  static peekClipboardObjects(): Record<string, unknown>[] | undefined {
+    return this.lastClipboardObjects;
+  }
+
   static readClipboardObjects(data: DataTransfer | null): Record<string, unknown>[] | undefined {
     const fromEvent =
       this.decodeClipboard(data?.getData(DESIGNER_CLIPBOARD_MIME)) ?? this.decodeClipboard(data?.getData("text/plain"));
@@ -143,12 +163,12 @@ export class LabelDesignerUtils {
     }
 
     const hasImage = data ? [...data.items].some((item) => item.type.startsWith("image/")) : false;
-    const text = data?.getData("text/plain");
-    if (hasImage || text) {
+    if (hasImage) {
       return;
     }
 
-    // Navigator clipboard writes are async; keep the last copied objects when the event payload is empty.
+    // Keydown copy writes the system clipboard asynchronously, and clicking a
+    // page chip leaves leftover text in the paste event. Keep the last in-app copy.
     return this.lastClipboardObjects;
   }
 
@@ -164,16 +184,18 @@ export class LabelDesignerUtils {
     const signature = JSON.stringify(serialized);
     if (signature !== this.clipboardSignature) {
       this.clipboardSignature = signature;
-      this.pasteGeneration = 0;
     }
-    this.pasteGeneration += 1;
-    const offset = this.pasteGeneration * GRID_SIZE;
 
-    for (const obj of objects) {
+    const positions = serialized.map((item) => ({
+      x: typeof item.left === "number" ? item.left : 0,
+      y: typeof item.top === "number" ? item.top : 0,
+    }));
+
+    for (const [index, obj] of objects.entries()) {
       obj.set({
         snapAngle: OBJECT_DEFAULTS.snapAngle,
-        left: obj.left + offset,
-        top: obj.top + offset,
+        left: positions[index]?.x ?? obj.left,
+        top: positions[index]?.y ?? obj.top,
       });
       CanvasUtils.bakeTextObjectScale(obj);
       CanvasUtils.fixFabricObjectScale(obj);
@@ -181,7 +203,14 @@ export class LabelDesignerUtils {
     }
 
     canvas.add(...objects);
-    canvas.setActiveObject(new fabric.ActiveSelection(objects));
+    this.selectObjects(canvas, objects);
+    for (const [index, obj] of objects.entries()) {
+      const pos = positions[index];
+      if (pos) {
+        obj.setXY(new fabric.Point(pos.x, pos.y));
+        obj.setCoords();
+      }
+    }
     canvas.requestRenderAll();
     return objects;
   }

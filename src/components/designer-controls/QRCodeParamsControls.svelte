@@ -1,14 +1,16 @@
 <script lang="ts">
   import { QRCode } from "$/fabric-object/qrcode";
   import { tr } from "$/utils/i18n";
+  import { getBoundText, setBoundText } from "$/utils/csv_preview";
 
   interface Props {
     selectedQRCode: QRCode;
     editRevision: number;
+    csvVariables?: { [key: string]: string };
     valueUpdated: () => void;
   }
 
-  let { selectedQRCode, editRevision, valueUpdated }: Props = $props();
+  let { selectedQRCode, editRevision, csvVariables, valueUpdated }: Props = $props();
 </script>
 
 <input type="hidden" value={editRevision} />
@@ -17,9 +19,9 @@
   <h3 class="insp-heading">{$tr("params.text.content")}</h3>
   <textarea
     class="insp-field insp-textarea"
-    value={selectedQRCode.text}
+    value={getBoundText(selectedQRCode)}
     oninput={(e) => {
-      selectedQRCode?.set("text", e.currentTarget.value);
+      setBoundText(selectedQRCode, e.currentTarget.value, csvVariables);
       valueUpdated();
     }}></textarea>
 </section>

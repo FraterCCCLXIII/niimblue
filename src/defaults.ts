@@ -5,6 +5,9 @@ import { applySelectionChromeDefaults, selectionChromeForZoom } from "$/utils/se
 
 export const configureFabric = () => {
   fabric.config.disableStyleCopyPaste = true;
+  fabric.FabricObject.customProperties = Array.from(
+    new Set([...(fabric.FabricObject.customProperties ?? []), "csvSource"]),
+  );
 
   fabric.classRegistry.setClass(TextboxExt, "Textbox");
   applySelectionChromeDefaults(selectionChromeForZoom(1));

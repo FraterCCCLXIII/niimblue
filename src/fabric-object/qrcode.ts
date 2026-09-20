@@ -128,7 +128,7 @@ export class QRCode<
   }
 
   override toObject(propertiesToInclude: any[] = []) {
-    return super.toObject([...QRCODE_PROPS, ...propertiesToInclude]);
+    return super.toObject([...QRCODE_PROPS, "csvSource", ...propertiesToInclude]);
   }
 }
 

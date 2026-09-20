@@ -4,15 +4,17 @@
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import FontFamilyPicker from "$/components/designer-controls/FontFamilyPicker.svelte";
   import { TextboxExt } from "$/fabric-object/textbox-ext";
+  import { getBoundText, setBoundText } from "$/utils/csv_preview";
 
   interface Props {
     selectedText: fabric.IText;
     textTargets?: fabric.IText[];
     editRevision: number;
+    csvVariables?: { [key: string]: string };
     valueUpdated: () => void;
   }
 
-  let { selectedText, textTargets, editRevision, valueUpdated }: Props = $props();
+  let { selectedText, textTargets, editRevision, csvVariables, valueUpdated }: Props = $props();
 
   const texts = () => (textTargets && textTargets.length > 0 ? textTargets : [selectedText]);
 
@@ -128,7 +130,7 @@
   };
 
   const textChanged = (value: string) => {
-    selectedText.set({ text: value });
+    setBoundText(selectedText, value, csvVariables);
     selectedText.setCoords();
     valueUpdated();
   };
@@ -148,7 +150,7 @@
   <h3 class="insp-heading">{$tr("params.text.content")}</h3>
   <textarea
     class="insp-field insp-textarea"
-    value={selectedText.text}
+    value={getBoundText(selectedText)}
     oninput={(e) => textChanged(e.currentTarget.value)}></textarea>
 </section>
 

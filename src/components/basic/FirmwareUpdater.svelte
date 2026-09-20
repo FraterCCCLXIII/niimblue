@@ -66,8 +66,7 @@
 </script>
 
 <div class="firmware-updater">
-  Firmware flashing
-  <div class="input-group input-group-sm mt-1">
+  <div class="input-group input-group-sm">
     {#if fwProgress}
       <span class="input-group-text">Uploading {fwProgress}</span>
     {:else}

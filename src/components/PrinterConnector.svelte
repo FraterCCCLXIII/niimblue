@@ -1,18 +1,14 @@
 <script lang="ts">
-  import { NiimbotCapacitorBleClient, SoundSettingsItemType, Utils, type AvailableTransports } from "@mmote/niimbluelib";
+  import { NiimbotCapacitorBleClient, Utils, type AvailableTransports } from "@mmote/niimbluelib";
   import {
     printerClient,
     connectedPrinterName,
     connectionState,
     initClient,
     heartbeatData,
-    printerInfo,
     printerMeta,
     heartbeatFails,
     automation,
-    rfidInfo,
-    ribbonRfidInfo,
-    refreshRfidInfo,
   } from "$/stores";
   import type { ConnectionType } from "$/types";
   import { tr, type TranslationKey } from "$/utils/i18n";
@@ -22,10 +18,13 @@
   import { onMount } from "svelte";
   import { LocalStoragePersistence } from "$/utils/persistence";
   import type { AppIconName } from "$/utils/lucide_icons";
-  import FirmwareUpdater from "$/components/basic/FirmwareUpdater.svelte";
+  import Dropdown from "bootstrap/js/dist/dropdown";
+  import PrinterInfoModal from "$/components/PrinterInfoModal.svelte";
 
   let connectionType = $state<ConnectionType>("bluetooth");
   let featureSupport = $state<AvailableTransports>({ webBluetooth: false, webSerial: false, capacitorBle: false });
+  let showInfoModal = $state(false);
+  let triggerEl: HTMLButtonElement | undefined = $state();
 
   const transports = $derived(
     (
@@ -53,6 +52,12 @@
   const connected = $derived($connectionState === "connected");
   const printerLabel = $derived($printerMeta?.model ?? $connectedPrinterName ?? $tr("connector.connect"));
 
+  $effect(() => {
+    if (!connected) {
+      showInfoModal = false;
+    }
+  });
+
   const onConnectClicked = async (type = connectionType) => {
     switchConnectionType(type);
     initClient(type);
@@ -74,30 +79,11 @@
     $printerClient.disconnect();
   };
 
-  const startHeartbeat = async () => {
-    $printerClient.startHeartbeat();
-  };
-
-  const stopHeartbeat = async () => {
-    $printerClient.stopHeartbeat();
-  };
-
-  const soundOn = async () => {
-    await $printerClient.abstraction.setSoundEnabled(SoundSettingsItemType.BluetoothConnectionSound, true);
-    await $printerClient.abstraction.setSoundEnabled(SoundSettingsItemType.PowerSound, true);
-  };
-
-  const soundOff = async () => {
-    await $printerClient.abstraction.setSoundEnabled(SoundSettingsItemType.BluetoothConnectionSound, false);
-    await $printerClient.abstraction.setSoundEnabled(SoundSettingsItemType.PowerSound, false);
-  };
-
-  const fetchInfo = async () => {
-    await $printerClient.fetchPrinterInfo();
-  };
-
-  const reset = async () => {
-    await $printerClient.abstraction.printerReset();
+  const openInfoModal = () => {
+    if (triggerEl) {
+      Dropdown.getInstance(triggerEl)?.hide();
+    }
+    showInfoModal = true;
   };
 
   const switchConnectionType = (c: ConnectionType) => {
@@ -146,11 +132,12 @@
 <div class="connect-menu dropdown">
   <button
     type="button"
+    bind:this={triggerEl}
     class="connect-trigger"
     class:is-connected={connected}
     class:is-connecting={connecting}
     data-bs-toggle="dropdown"
-    data-bs-auto-close={connected ? "outside" : true}
+    data-bs-auto-close="true"
     use:fixedDropdown
     disabled={connecting || (!connected && !hasTransport)}
     aria-haspopup="menu">
@@ -176,91 +163,10 @@
         </div>
       </div>
 
-      {#if $printerInfo}
-        <div class="connect-details">
-          Printer info
-          <ul>
-            {#each Object.entries($printerInfo) as [key, value] (key)}
-              <li>{key}: <strong>{value ?? "-"}</strong></li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
-
-      {#if $printerMeta}
-        <button class="connect-item" type="button" data-bs-toggle="collapse" data-bs-target="#modelMeta">
-          Model metadata
-          <MdIcon icon="expand_more" />
-        </button>
-        <div class="collapse" id="modelMeta">
-          <ul>
-            {#each Object.entries($printerMeta) as [key, value] (key)}
-              <li>{key}: <strong>{value ?? "-"}</strong></li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
-
-      {#if $rfidInfo}
-        <button class="connect-item" type="button" data-bs-toggle="collapse" data-bs-target="#rfidInfo">
-          RFID info
-          <MdIcon icon="expand_more" />
-        </button>
-        <div class="collapse" id="rfidInfo">
-          <button class="connect-item" type="button" onclick={refreshRfidInfo}>Update</button>
-          <ul>
-            {#each Object.entries($rfidInfo) as [key, value] (key)}
-              <li>{key}: <strong>{value ?? "-"}</strong></li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
-
-      {#if $ribbonRfidInfo}
-        <button class="connect-item" type="button" data-bs-toggle="collapse" data-bs-target="#ribbonRfidInfo">
-          Ribbon RFID info
-          <MdIcon icon="expand_more" />
-        </button>
-        <div class="collapse" id="ribbonRfidInfo">
-          <button class="connect-item" type="button" onclick={refreshRfidInfo}>Update</button>
-          <ul>
-            {#each Object.entries($ribbonRfidInfo) as [key, value] (key)}
-              <li>{key}: <strong>{value ?? "-"}</strong></li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
-
-      {#if $heartbeatData}
-        <button class="connect-item" type="button" data-bs-toggle="collapse" data-bs-target="#heartbeatData">
-          Heartbeat data
-          <MdIcon icon="expand_more" />
-        </button>
-        <div class="collapse" id="heartbeatData">
-          <ul>
-            {#each Object.entries($heartbeatData) as [key, value] (key)}
-              <li>{key}: <strong>{value ?? "-"}</strong></li>
-            {/each}
-          </ul>
-        </div>
-      {/if}
-
-      <FirmwareUpdater />
-
-      <button class="connect-item" type="button" data-bs-toggle="collapse" data-bs-target="#tests">
-        Tests
-        <MdIcon icon="expand_more" />
+      <button type="button" class="connect-item" role="menuitem" onclick={openInfoModal}>
+        <MdIcon icon="info" />
+        {$tr("connector.information")}
       </button>
-      <div class="collapse" id="tests">
-        <div class="connect-tests">
-          <button type="button" onclick={startHeartbeat}>Heartbeat on</button>
-          <button type="button" onclick={stopHeartbeat}>Heartbeat off</button>
-          <button type="button" onclick={soundOn}>Sound on</button>
-          <button type="button" onclick={soundOff}>Sound off</button>
-          <button type="button" onclick={fetchInfo}>Fetch info again</button>
-          <button type="button" onclick={reset}>Reset</button>
-        </div>
-      </div>
 
       <div class="connect-dropdown__rule"></div>
       <button type="button" class="connect-item is-danger" role="menuitem" onclick={onDisconnectClicked}>
@@ -286,6 +192,8 @@
     {/if}
   </div>
 </div>
+
+<PrinterInfoModal bind:show={showInfoModal} />
 
 <style>
   .connect-menu {
@@ -421,33 +329,5 @@
     height: 1px;
     margin: 4px 8px;
     background: var(--ws-line);
-  }
-
-  .connect-details,
-  .connect-dropdown :global(.collapse) {
-    padding: 4px 12px 8px;
-    color: var(--ws-muted);
-    font-size: 12px;
-  }
-
-  .connect-details ul,
-  .connect-dropdown ul {
-    margin: 6px 0 0;
-    padding-left: 16px;
-  }
-
-  .connect-tests {
-    display: flex;
-    flex-wrap: wrap;
-    gap: 6px;
-  }
-
-  .connect-tests button {
-    appearance: none;
-    border: 1px solid var(--ws-line-strong);
-    border-radius: 8px;
-    background: var(--ws-surface);
-    padding: 4px 8px;
-    font-size: 12px;
   }
 </style>

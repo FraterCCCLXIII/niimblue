@@ -1,14 +1,16 @@
 <script lang="ts">
   import { Barcode } from "$/fabric-object/barcode";
   import { tr } from "$/utils/i18n";
+  import { getBoundText, setBoundText } from "$/utils/csv_preview";
 
   interface Props {
     selectedBarcode: Barcode;
     editRevision: number;
+    csvVariables?: { [key: string]: string };
     valueUpdated: () => void;
   }
 
-  let { selectedBarcode, editRevision, valueUpdated }: Props = $props();
+  let { selectedBarcode, editRevision, csvVariables, valueUpdated }: Props = $props();
 </script>
 
 <input type="hidden" value={editRevision} />
@@ -17,9 +19,9 @@
   <h3 class="insp-heading">{$tr("params.text.content")}</h3>
   <textarea
     class="insp-field insp-textarea"
-    value={selectedBarcode.text}
+    value={getBoundText(selectedBarcode)}
     oninput={(e) => {
-      selectedBarcode?.set("text", e.currentTarget.value);
+      setBoundText(selectedBarcode, e.currentTarget.value, csvVariables);
       valueUpdated();
     }}></textarea>
 </section>

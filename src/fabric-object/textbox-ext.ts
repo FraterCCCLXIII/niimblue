@@ -6,7 +6,7 @@ interface UniqueTextboxExtProps {
   minHeight: number;
 }
 
-const TEXTBOX_PROPS: Array<keyof UniqueTextboxExtProps> = ["fontAutoSize", "minHeight"];
+const TEXTBOX_PROPS: Array<keyof UniqueTextboxExtProps | "csvSource"> = ["fontAutoSize", "minHeight", "csvSource"];
 
 export const textboxExtDefaultValues: Partial<fabric.TClassProperties<TextboxExt>> = {
   fontAutoSize: false,

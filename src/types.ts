@@ -31,6 +31,12 @@ export type Range<T extends number> = number extends T ? number : _Range<T, []>;
 
 export const CsvParamsSchema = z.object({
   data: z.string(),
+  sourceData: z.string().optional(),
+  name: z.string().optional(),
+  selected: z.array(z.number().int().nonnegative()).optional(),
+  printColumnNames: z.boolean().optional(),
+  page: z.number().int().nonnegative().optional(),
+  pageCanvases: z.array(z.lazy(() => FabricJsonSchema)).optional(),
 });
 
 /** Not validated */

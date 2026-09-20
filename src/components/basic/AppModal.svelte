@@ -6,12 +6,15 @@
   interface Props {
     show: boolean;
     title: string;
+    size?: "md" | "lg" | "xl";
+    scroll?: boolean;
+    stack?: boolean;
     onClose?: () => void;
     children: Snippet;
     footer?: Snippet;
   }
 
-  let { show = $bindable(), title, onClose, children, footer }: Props = $props();
+  let { show = $bindable(), title, size = "md", scroll = true, stack = false, onClose, children, footer }: Props = $props();
 
   let modalEl: HTMLElement;
   let modal: Modal;
@@ -45,8 +48,15 @@
   };
 </script>
 
-<div bind:this={modalEl} class="modal fade workspace-modal" data-bs-theme="light" tabindex="-1" aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered">
+<div
+  bind:this={modalEl}
+  class="modal fade workspace-modal"
+  class:workspace-modal--wide={size === "lg" || size === "xl"}
+  class:workspace-modal--stack={stack}
+  data-bs-theme="light"
+  tabindex="-1"
+  aria-hidden="true">
+  <div class="modal-dialog modal-dialog-centered" class:modal-lg={size === "lg"} class:modal-xl={size === "xl"}>
     <div class="modal-content">
       <div class="modal-header">
         <h1 class="modal-title">{title}</h1>
@@ -54,9 +64,13 @@
       </div>
 
       <div class="modal-body">
-        <CustomScroll class="workspace-modal__scroll">
+        {#if scroll}
+          <CustomScroll class="workspace-modal__scroll">
+            {@render children()}
+          </CustomScroll>
+        {:else}
           {@render children()}
-        </CustomScroll>
+        {/if}
       </div>
 
       {#if footer}

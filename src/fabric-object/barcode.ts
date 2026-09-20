@@ -260,7 +260,7 @@ export class Barcode<
   }
 
   override toObject(propertiesToInclude: any[] = []) {
-    return super.toObject([...BARCODE_PROPS, ...propertiesToInclude]);
+    return super.toObject([...BARCODE_PROPS, "csvSource", ...propertiesToInclude]);
   }
 }
 

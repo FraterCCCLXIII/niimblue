@@ -1,35 +1,45 @@
 <script lang="ts">
   import { onMount } from "svelte";
   import { derived } from "svelte/store";
-  import { appConfig, connectionState, printerClient, printerMeta, refreshRfidInfo } from "$/stores";
+  import { connectionState, printerClient, printerMeta, refreshRfidInfo } from "$/stores";
   import * as effects from "$/utils/post_process";
   import {
     type EncodedImage,
     ImageEncoder,
     LabelType,
     printTaskNames,
-    type PrintProgressEvent,
     type PrintTaskName,
     AbstractPrintTask,
+    PrintError,
+    PrinterErrorCode,
     Utils,
   } from "@mmote/niimbluelib";
   import type { LabelProps, PostProcessType, FabricJson, PreviewProps, PreviewPropsOffset } from "$/types";
   import ParamLockButton from "$/components/basic/ParamLockButton.svelte";
   import { tr, type TranslationKey } from "$/utils/i18n";
   import { canvasPreprocess } from "$/utils/canvas_preprocess";
-  import { type DSVRowArray, csvParse } from "d3-dsv";
   import { LocalStoragePersistence } from "$/utils/persistence";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import { Toasts } from "$/utils/toasts";
   import { CustomCanvas } from "$/fabric-object/custom_canvas";
   import { FileUtils } from "$/utils/file_utils";
   import AppModal from "$/components/basic/AppModal.svelte";
+  import AdvancedPrintModal from "$/components/AdvancedPrintModal.svelte";
   import { normalizeLabelPrintDirection } from "$/utils/label_template";
   import { fitPrintCanvas, printerScale } from "$/utils/print_raster";
+  import {
+    csvRowRepeatCount,
+    expandCsvPrintRows,
+    parseCopyCount,
+    parseCsvTable,
+    type AdvancedPrintPlan,
+    type CsvRow,
+    type PrintQtyMode,
+  } from "$/utils/csv_source";
 
   interface Props {
     labelProps: LabelProps;
-    canvasCallback: () => FabricJson;
+    canvasCallback: (page?: number) => FabricJson;
     printNow?: boolean;
     csvData: string;
     csvEnabled: boolean;
@@ -69,12 +79,20 @@
   let statusTimer: NodeJS.Timeout | undefined = undefined;
   let error = $state<string>("");
   let detectedPrintTaskName: PrintTaskName | undefined = $printerClient?.getPrintTaskType();
-  let csvParsed: DSVRowArray<string>;
+  const csvTable = $derived(csvEnabled ? parseCsvTable(csvData) : { columns: [] as string[], rows: [] as CsvRow[] });
+  let csvParsed: CsvRow[] = [];
+  let pageCopies = $state<number[]>([]);
+  let advancedOpen = $state(false);
+  let advancedSelected = $state<number[]>([]);
+  let advancedQuantities = $state<number[]>([]);
+  let advancedMode = $state<PrintQtyMode>("same");
+  let advancedColumn = $state<string | undefined>(undefined);
   let page = $state<number>(0);
   let pagesTotal = $state<number>(1);
   let offset = $state<PreviewPropsOffset>({ x: 0, y: 0, offsetType: "inner" });
   let offsetWarning = $state<string>("");
   let currentPrintTask: AbstractPrintTask | undefined;
+  let previewChain: Promise<void> = Promise.resolve();
 
   let savedProps = $state<PreviewProps>({});
 
@@ -89,11 +107,15 @@
     clearInterval(statusTimer);
 
     if (!$disconnected && printState !== "idle") {
-      if (currentPrintTask !== undefined) {
-        await currentPrintTask.printEnd();
-      } else {
-        console.warn("Print task undefined, falling back to PrintEnd command");
-        await $printerClient.abstraction.printEnd();
+      try {
+        if (currentPrintTask !== undefined) {
+          await currentPrintTask.printEnd();
+        } else {
+          console.warn("Print task undefined, falling back to PrintEnd command");
+          await $printerClient.abstraction.printEnd();
+        }
+      } catch (e) {
+        console.warn("PrintEnd failed", e);
       }
 
       refreshRfidInfo();
@@ -101,8 +123,81 @@
       $printerClient.startHeartbeat();
     }
 
+    currentPrintTask = undefined;
     printState = "idle";
     printProgress = 0;
+  };
+
+  const formatPrintError = (cause: unknown): string => {
+    const reasonId = cause instanceof PrintError ? cause.reasonId : undefined;
+    const reasonName = reasonId != null ? (PrinterErrorCode[reasonId] ?? "unknown") : undefined;
+    const message = reasonId != null ? `Print error ${reasonId}: ${reasonName}` : `${cause}`;
+    if (reasonId === PrinterErrorCode.DataError || message.includes("DataError")) {
+      return `${message} ${$tr("preview.error.data")}`;
+    }
+    if (
+      reasonId === PrinterErrorCode.LackPaper ||
+      reasonId === PrinterErrorCode.PaperOutException ||
+      reasonId === PrinterErrorCode.ECheckPaper ||
+      reasonId === PrinterErrorCode.B3sAbnormalPaperOutput
+    ) {
+      return `${message} ${$tr("preview.error.feed")}`;
+    }
+    return message;
+  };
+
+  const isPercent = (value: number): boolean => value >= 0 && value <= 100;
+
+  const isTransientPrintStatus = (cause: unknown): boolean =>
+    cause instanceof PrintError && cause.reasonId === PrinterErrorCode.PrinterBusy;
+
+  const waitUntilPagesPrinted = async (totalPages: number): Promise<void> => {
+    const deadline = Date.now() + Math.max(12_000, totalPages * 8_000);
+    let sawInProgress = false;
+
+    while (Date.now() < deadline) {
+      try {
+        const status = await $printerClient.abstraction.getPrintStatus(2);
+        const printDone = !isPercent(status.pagePrintProgress) || status.pagePrintProgress >= 100;
+        const inProgress =
+          status.page < totalPages || (isPercent(status.pagePrintProgress) && status.pagePrintProgress < 100);
+        printProgress = Math.floor((Math.max(status.page, 1) / totalPages) * (isPercent(status.pagePrintProgress) ? status.pagePrintProgress : 100));
+        if (inProgress) {
+          sawInProgress = true;
+        }
+        if (sawInProgress && status.page >= totalPages && printDone) {
+          // Last label still has to leave the head; PrintEnd too early causes a feed error.
+          await Utils.sleep(600);
+          return;
+        }
+      } catch (cause) {
+        if (!isTransientPrintStatus(cause)) {
+          throw cause;
+        }
+      }
+      await Utils.sleep(150);
+    }
+
+    throw new Error("Timed out waiting for the printer to finish");
+  };
+
+  const copiesForPage = (index: number): number => {
+    const copies = pageCopies[index];
+    if (copies != null && copies > 0) {
+      return copies;
+    }
+    return Math.max(1, quantity);
+  };
+
+  const totalPrintCopies = (): number => {
+    if (pagesTotal <= 0) {
+      return 0;
+    }
+    let total = 0;
+    for (let index = 0; index < pagesTotal; index++) {
+      total += copiesForPage(index);
+    }
+    return total;
   };
 
   const onPrintOnSystemPrinter = async () => {
@@ -111,78 +206,80 @@
     for (let curPage = 0; curPage < pagesTotal; curPage++) {
       page = curPage;
       await generatePreviewData(page);
-      sources.push(previewCanvas.toDataURL("image/png"));
+      const copies = copiesForPage(curPage);
+      for (let copy = 0; copy < copies; copy++) {
+        sources.push(previewCanvas.toDataURL("image/png"));
+      }
     }
 
     FileUtils.printImageUrls(sources);
   };
 
+  const encodeCurrentPreview = (): EncodedImage => {
+    if (previewCanvas.width < 8 || previewCanvas.height < 1) {
+      throw new Error($tr("preview.error.empty_image"));
+    }
+    const encoded = ImageEncoder.encodeCanvas(
+      previewCanvas,
+      normalizeLabelPrintDirection(labelProps).printDirection,
+    );
+    if (encoded.rows < 1 || encoded.cols < 8 || encoded.cols % 8 !== 0) {
+      throw new Error($tr("preview.error.empty_image"));
+    }
+    return encoded;
+  };
+
+  const preparePrintPages = async (): Promise<{ encoded: EncodedImage; copies: number }[]> => {
+    const prepared: { encoded: EncodedImage; copies: number }[] = [];
+    for (let curPage = 0; curPage < pagesTotal; curPage++) {
+      page = curPage;
+      await generatePreviewData(page);
+      prepared.push({ encoded: encodeCurrentPreview(), copies: copiesForPage(curPage) });
+    }
+    return prepared;
+  };
+
   const onPrint = async () => {
     printState = "sending";
     error = "";
+    const jobCopies = totalPrintCopies();
+    if (jobCopies <= 0 || pagesTotal <= 0) {
+      printState = "idle";
+      return;
+    }
 
-    // do it in a stupid way (multi-page print not finished yet)
-    for (let curPage = 0; curPage < pagesTotal; curPage++) {
-      $printerClient.stopHeartbeat();
+    $printerClient.stopHeartbeat();
 
+    try {
+      const prepared = await preparePrintPages();
       currentPrintTask = $printerClient.abstraction.newPrintTask(printTaskName, {
-        totalPages: quantity,
+        totalPages: jobCopies,
         density,
         speed,
         labelType,
-        statusPollIntervalMs: 100,
-        statusTimeoutMs: 8_000,
+        statusPollIntervalMs: 200,
+        statusTimeoutMs: Math.max(12_000, jobCopies * 8_000),
       });
 
-      page = curPage;
-      console.log("Printing page", page);
-
-      await generatePreviewData(page);
-
-      try {
-        const encoded: EncodedImage = ImageEncoder.encodeCanvas(
-          previewCanvas,
-          normalizeLabelPrintDirection(labelProps).printDirection,
-        );
-        await currentPrintTask.printInit();
-        await currentPrintTask.printPage(encoded, quantity);
-      } catch (e) {
-        error = `${e}`;
-        console.error(e);
-        return;
+      await currentPrintTask.printInit();
+      for (const [index, item] of prepared.entries()) {
+        console.log("Printing page", index, "x", item.copies);
+        await currentPrintTask.printPage(item.encoded, item.copies);
+        printState = "printing";
       }
-
-      printState = "printing";
-
-      const listener = (e: PrintProgressEvent) => {
-        printProgress = Math.floor((e.page / quantity) * ((e.pagePrintProgress + e.pageFeedProgress) / 2));
-      };
-
-      $printerClient.on("printprogress", listener);
-
-      try {
-        await currentPrintTask.waitForFinished();
-      } catch (e) {
-        error = `${e}`;
-        console.error(e);
-      }
-
-      $printerClient.off("printprogress", listener);
-
-      await endPrint();
-
-      if (
-        $appConfig.pageDelay !== undefined &&
-        $appConfig.pageDelay > 0 &&
-        pagesTotal > 1 &&
-        curPage < pagesTotal - 1
-      ) {
-        await Utils.sleep($appConfig.pageDelay);
-      }
+      await waitUntilPagesPrinted(jobCopies);
+    } catch (e) {
+      error = formatPrintError(e);
+      console.error(e);
     }
 
+    await Utils.sleep(400);
+    await endPrint();
+
     printState = "idle";
-    $printerClient.startHeartbeat();
+    if (!$disconnected) {
+      $printerClient.startHeartbeat();
+    }
 
     if (!error) {
       try {
@@ -190,14 +287,14 @@
           id: `print_${FileUtils.timestamp()}_${Math.random().toString(36).slice(2, 7)}`,
           title: labelTitle || "Untitled",
           timestamp: FileUtils.timestamp(),
-          copies: quantity * Math.max(pagesTotal, 1),
+          copies: jobCopies,
           pages: pagesTotal,
           thumbnailBase64: previewCanvas ? FileUtils.makeLabelThumbnail(previewCanvas) : undefined,
           sourceId,
           size: labelProps.size,
         });
         if (sourceId) {
-          LocalStoragePersistence.incrementPrintCount(sourceId, quantity * Math.max(pagesTotal, 1));
+          LocalStoragePersistence.incrementPrintCount(sourceId, jobCopies);
         }
       } catch (e) {
         console.error(e);
@@ -320,7 +417,7 @@
       page = 0;
       return;
     }
-    page = Math.max(0, Math.min(csvParsed.length - 1, page - 1));
+    page = Math.max(0, Math.min(Math.max(csvParsed.length - 1, 0), page - 1));
     generatePreviewData(page);
   };
 
@@ -329,11 +426,11 @@
       page = 0;
       return;
     }
-    page = Math.min(csvParsed.length - 1, page + 1);
+    page = Math.min(Math.max(csvParsed.length - 1, 0), page + 1);
     generatePreviewData(page);
   };
 
-  const generatePreviewData = async (page: number): Promise<void> => {
+  const generatePreviewDataNow = async (page: number): Promise<void> => {
     const printDirection = normalizeLabelPrintDirection(labelProps).printDirection;
     const fabricTempCanvas = new CustomCanvas(undefined, {
       width: labelProps.size.width,
@@ -341,84 +438,115 @@
       enableRetinaScaling: false,
     });
 
-    fabricTempCanvas.setCustomBackground(false);
-    fabricTempCanvas.setHighlightMirror(false);
+    try {
+      fabricTempCanvas.setCustomBackground(false);
+      fabricTempCanvas.setHighlightMirror(false);
 
-    fabricTempCanvas.setLabelProps(labelProps);
+      fabricTempCanvas.setLabelProps(labelProps);
 
-    await fabricTempCanvas.loadFromJSON(canvasCallback());
-    fabricTempCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
-    fabricTempCanvas.setDimensions({
-      width: labelProps.size.width,
-      height: labelProps.size.height,
-    });
+      await fabricTempCanvas.loadFromJSON(canvasCallback(page));
+      fabricTempCanvas.setViewportTransform([1, 0, 0, 1, 0, 0]);
+      fabricTempCanvas.setDimensions({
+        width: labelProps.size.width,
+        height: labelProps.size.height,
+      });
 
-    let variables = {};
+      let variables = {};
 
-    if (csvEnabled) {
-      if (page >= 0 && page < csvParsed.length) {
-        variables = csvParsed[page];
-      } else {
-        console.warn(`Page ${page} is out of csv bounds (csv length is ${csvParsed.length})`);
+      if (csvEnabled) {
+        if (page >= 0 && page < csvParsed.length) {
+          variables = csvParsed[page];
+        } else {
+          console.warn(`Page ${page} is out of csv bounds (csv length is ${csvParsed.length})`);
+        }
       }
+
+      console.log("Page variables:", variables);
+
+      canvasPreprocess(fabricTempCanvas, variables);
+
+      await fabricTempCanvas.createMirroredObjects();
+
+      fabricTempCanvas.requestRenderAll();
+
+      const scale = printerScale($printerMeta?.dpi);
+      const preRenderedCanvas = fitPrintCanvas(fabricTempCanvas.toCanvasElement(scale), printDirection);
+      const ctx = preRenderedCanvas.getContext("2d")!;
+      previewCanvas.width = preRenderedCanvas.width;
+      previewCanvas.height = preRenderedCanvas.height;
+      previewContext = previewCanvas.getContext("2d")!;
+      originalImage = ctx.getImageData(0, 0, preRenderedCanvas.width, preRenderedCanvas.height);
+
+      updatePreview();
+    } finally {
+      fabricTempCanvas.dispose();
     }
+  };
 
-    console.log("Page variables:", variables);
-
-    canvasPreprocess(fabricTempCanvas, variables);
-
-    await fabricTempCanvas.createMirroredObjects();
-
-    fabricTempCanvas.requestRenderAll();
-
-    const scale = printerScale($printerMeta?.dpi);
-    const preRenderedCanvas = fitPrintCanvas(fabricTempCanvas.toCanvasElement(scale), printDirection);
-    const ctx = preRenderedCanvas.getContext("2d")!;
-    previewCanvas.width = preRenderedCanvas.width;
-    previewCanvas.height = preRenderedCanvas.height;
-    previewContext = previewCanvas.getContext("2d")!;
-    originalImage = ctx.getImageData(0, 0, preRenderedCanvas.width, preRenderedCanvas.height);
-
-    updatePreview();
-
-    fabricTempCanvas.dispose();
+  const generatePreviewData = (page: number): Promise<void> => {
+    const next = previewChain.then(() => generatePreviewDataNow(page));
+    previewChain = next.then(
+      () => undefined,
+      () => undefined,
+    );
+    return next;
   };
 
   const onModalClose = () => {
     endPrint();
   };
 
+  const copiesVary = $derived(
+    csvEnabled && pageCopies.length > 1 && pageCopies.some((copies) => copies !== pageCopies[0]),
+  );
+
+  const applyAdvancedPlan = async (plan: AdvancedPrintPlan) => {
+    const rows = plan.selected
+      .map((index) => csvTable.rows[index])
+      .filter((row): row is CsvRow => row != null);
+    csvParsed = rows;
+    pageCopies = plan.quantities.slice(0, rows.length).map((copies) => Math.max(1, parseCopyCount(copies, 1)));
+    pagesTotal = Math.max(rows.length, 1);
+    page = 0;
+    advancedSelected = plan.selected;
+    advancedQuantities = csvTable.rows.map((_, index) => {
+      const selectedAt = plan.selected.indexOf(index);
+      if (selectedAt >= 0) {
+        return Math.max(1, parseCopyCount(plan.quantities[selectedAt], 1));
+      }
+      return advancedQuantities[index] ?? Math.max(1, quantity);
+    });
+    advancedMode = plan.mode;
+    advancedColumn = plan.column;
+    if (pageCopies.length > 0 && pageCopies.every((copies) => copies === pageCopies[0])) {
+      quantity = pageCopies[0];
+    }
+    advancedOpen = false;
+    await generatePreviewData(page);
+  };
+
+  const closeAdvancedPrint = () => {
+    advancedOpen = false;
+  };
+
+  const onCopiesChanged = () => {
+    const next = Math.max(1, parseCopyCount(quantity, 1));
+    quantity = next;
+    updateSavedProp("quantity", next);
+    if (pageCopies.length === pagesTotal && (advancedMode === "same" || pageCopies.every((copies) => copies === pageCopies[0]))) {
+      pageCopies = pageCopies.map(() => next);
+      advancedQuantities = csvTable.rows.map((_, index) =>
+        advancedSelected.includes(index) ? next : (advancedQuantities[index] ?? next),
+      );
+    }
+  };
+
   onMount(async () => {
     if (csvEnabled) {
-      const parseResult = csvParse(csvData);
-      const spread: DSVRowArray<string> = Object.assign([], { columns: parseResult.columns });
-
-      for (let row of parseResult) {
-        for (const k of Object.keys(row)) {
-          row[k] = row[k].replaceAll("\\n", "\n");
-        }
-
-        let times = 1;
-
-        if ("$times" in row && row["$times"] !== "") {
-          try {
-            times = parseInt(row["$times"]);
-          } catch (e) {
-            console.warn("$times parse error", e);
-          }
-        }
-
-        if (times < 0) {
-          times = 0;
-        }
-
-        for (let i = 0; i < times; i++) {
-          spread.push(row);
-        }
-      }
-
-      csvParsed = spread;
+      csvParsed = expandCsvPrintRows(csvTable.rows);
       pagesTotal = csvParsed.length;
+      advancedSelected = csvTable.rows.map((_, index) => index);
+      advancedQuantities = csvTable.rows.map((row) => Math.max(1, csvRowRepeatCount(row)));
     }
 
     if (detectedPrintTaskName !== undefined) {
@@ -580,13 +708,26 @@
         type="number"
         min="1"
         bind:value={quantity}
-        onchange={() => updateSavedProp("quantity", quantity)} />
+        disabled={copiesVary}
+        onchange={onCopiesChanged} />
       <ParamLockButton
         propName="quantity"
         value={quantity}
         savedValue={savedProps.quantity}
         onClick={toggleSavedProp} />
     </div>
+
+    {#if csvEnabled}
+      <button
+        type="button"
+        class="btn btn-outline-secondary"
+        disabled={printState !== "idle" || csvTable.rows.length === 0}
+        onclick={() => {
+          advancedOpen = true;
+        }}>
+        {$tr("preview.advanced")}
+      </button>
+    {/if}
 
     <div class="input-group flex-nowrap input-group-sm">
       <span class="input-group-text">{$tr("preview.density")}</span>
@@ -706,6 +847,19 @@
     </button>
   {/snippet}
 </AppModal>
+
+{#if advancedOpen}
+  <AdvancedPrintModal
+    bind:show={advancedOpen}
+    table={csvTable}
+    selected={advancedSelected}
+    quantities={advancedQuantities}
+    mode={advancedMode}
+    column={advancedColumn}
+    sameQuantity={quantity}
+    onCancel={closeAdvancedPrint}
+    onConfirm={applyAdvancedPlan} />
+{/if}
 
 <style>
   canvas {

@@ -18,12 +18,14 @@
     selectedObject?: fabric.FabricObject;
     selectedCount: number;
     editRevision: number;
+    csvColumns?: string[];
+    csvVariables?: { [key: string]: string };
     onDelete: () => void;
     onClone: () => void;
     onValueUpdated: () => void;
   }
 
-  let { selectedObject, selectedCount, editRevision, onDelete, onClone, onValueUpdated }: Props = $props();
+  let { selectedObject, selectedCount, editRevision, csvColumns = [], csvVariables, onDelete, onClone, onValueUpdated }: Props = $props();
 
   const targets = $derived.by(() => {
     if (!selectedObject) {
@@ -61,23 +63,27 @@
   <p class="object-empty">{$tr("editor.object_settings.empty")}</p>
 {:else if selectedObject}
   {#if primaryText}
-    <TextParamsControls selectedText={primaryText} {textTargets} {editRevision} valueUpdated={onValueUpdated} />
+    <TextParamsControls selectedText={primaryText} {textTargets} {editRevision} {csvVariables} valueUpdated={onValueUpdated} />
   {/if}
 
   {#if primaryQr}
-    <QrCodeParamsPanel selectedQRCode={primaryQr} {editRevision} valueUpdated={onValueUpdated} />
+    <QrCodeParamsPanel selectedQRCode={primaryQr} {editRevision} {csvVariables} valueUpdated={onValueUpdated} />
   {/if}
   {#if primaryAruco}
     <ArUcoParamsPanel selectedArUco={primaryAruco} {editRevision} valueUpdated={onValueUpdated} />
   {/if}
   {#if primaryBarcode}
-    <BarcodeParamsPanel selectedBarcode={primaryBarcode} {editRevision} valueUpdated={onValueUpdated} />
+    <BarcodeParamsPanel selectedBarcode={primaryBarcode} {editRevision} {csvVariables} valueUpdated={onValueUpdated} />
   {/if}
 
   {#if showVariables}
     <div class="insp-row">
       <span class="insp-row__label">{$tr("params.variables.insert")}</span>
-      <VariableInsertControl selectedObject={primaryText ?? primaryQr ?? primaryBarcode!} valueUpdated={onValueUpdated} />
+      <VariableInsertControl
+        selectedObject={primaryText ?? primaryQr ?? primaryBarcode!}
+        {csvColumns}
+        {csvVariables}
+        valueUpdated={onValueUpdated} />
     </div>
   {/if}
 

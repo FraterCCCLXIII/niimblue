@@ -1,5 +1,6 @@
 import * as fabric from "fabric";
 import type { ExportedLabelTemplate, LabelProps } from "$/types";
+import { serializeCanvasJson } from "$/utils/csv_preview";
 
 export type UndoState = { undoDisabled: boolean; redoDisabled: boolean };
 
@@ -13,6 +14,7 @@ export class UndoRedo {
 
   public onLabelUpdate?: (data: ExportedLabelTemplate) => Promise<void>;
   public onStateUpdate?: (state: UndoState) => void;
+  public capture?: () => Partial<ExportedLabelTemplate>;
 
   private updateState() {
     this.onStateUpdate?.({
@@ -47,7 +49,8 @@ export class UndoRedo {
 
     this.buf.push({
       label: labelProps,
-      canvas: fabricCanvas.toJSON(),
+      canvas: serializeCanvasJson(fabricCanvas),
+      ...this.capture?.(),
     });
 
     if (this.buf.length > this.UNDO_MAX) {

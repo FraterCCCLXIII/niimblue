@@ -66,6 +66,7 @@ export const UI_ICON_MAP = {
   horizontal_rule: "Minus",
   hourglass_top: "Hourglass",
   image: "Image",
+  info: "Info",
   invert_colors: "Blend",
   more_horiz: "Ellipsis",
   line_weight: "Minus",
