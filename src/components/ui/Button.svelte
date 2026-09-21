@@ -27,7 +27,7 @@
   {type}
   {...rest}
   class={cn(
-    "inline-flex items-center justify-center gap-1.5 border font-normal transition-colors disabled:opacity-45",
+    "inline-flex items-center justify-center gap-1.5 whitespace-nowrap border font-normal transition-colors disabled:opacity-45",
     pill ? "rounded-full" : "rounded-lg",
     size === "md" && "min-h-9 px-4 text-sm",
     size === "sm" && "min-h-8 px-3 text-xs",

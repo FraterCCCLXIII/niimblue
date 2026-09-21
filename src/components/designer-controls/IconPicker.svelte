@@ -65,11 +65,12 @@
   };
 </script>
 
-<Menu closeOnSelect={false} onOpen={onShow} class="w-[min(100vw,450px)] p-0">
+<Menu closeOnSelect={false} onOpen={onShow} triggerClass="w-full" class="w-[min(100vw,450px)] p-0">
   {#snippet trigger({ toggle })}
-    <Button size="sm" pill={false} onclick={toggle}>
+    <button type="button" class="element-tile w-full" onclick={toggle}>
       <MdIcon icon="emoji_emotions" />
-    </Button>
+      {$tr("editor.elements.icon")}
+    </button>
   {/snippet}
   <h6 class="px-3 pt-3 text-[11px] font-semibold tracking-wide text-muted uppercase">{$tr("editor.iconpicker.title")}</h6>
   <div class="flex flex-col gap-2 p-3">

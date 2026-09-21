@@ -8,6 +8,7 @@
     align?: "start" | "end";
     closeOnSelect?: boolean;
     class?: string;
+    triggerClass?: string;
     onOpen?: () => void;
     trigger: Snippet<[{ toggle: () => void; open: boolean }]>;
     children: Snippet;
@@ -18,6 +19,7 @@
     align = "end",
     closeOnSelect = true,
     class: className,
+    triggerClass,
     onOpen,
     trigger,
     children,
@@ -88,7 +90,7 @@
   });
 </script>
 
-<div class="relative inline-flex" bind:this={triggerEl}>
+<div class={cn("relative inline-flex", triggerClass)} bind:this={triggerEl}>
   {@render trigger({ toggle, open })}
 </div>
 

@@ -59,45 +59,14 @@
         {tileLabel(tile.key)}
       </button>
     {/each}
-    <div class="element-tile tile-embed">
-      <IconPicker onSubmitSvg={onSvgIconPicked} />
-      <span>{$tr("editor.elements.icon")}</span>
-    </div>
+    <IconPicker onSubmitSvg={onSvgIconPicked} />
     {#each remainingTiles as tile (tile.type)}
       <button type="button" class="element-tile" onclick={() => onPick(tile.type)}>
         <MdIcon icon={tile.icon} />
         {tileLabel(tile.key)}
       </button>
     {/each}
-    <div class="element-tile tile-embed">
-      <PdfImportButton {labelProps} onImageReady={pdfImageReady} />
-    </div>
-    <div class="element-tile tile-embed">
-      <ZplImportButton {labelProps} onImageReady={zplImageReady} />
-    </div>
+    <PdfImportButton {labelProps} onImageReady={pdfImageReady} />
+    <ZplImportButton {labelProps} onImageReady={zplImageReady} />
   </div>
 </div>
-
-<style>
-  .tile-embed {
-    position: relative;
-  }
-
-  .tile-embed :global(.dropdown),
-  .tile-embed :global(button.btn) {
-    width: 100%;
-  }
-
-  .tile-embed :global(button.btn) {
-    border: 0;
-    background: transparent;
-    color: inherit;
-    box-shadow: none;
-    padding: 0;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 6px;
-    font-size: 12px;
-  }
-</style>

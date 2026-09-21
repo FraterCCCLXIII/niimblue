@@ -2,7 +2,6 @@
   import type { LabelProps } from "$/types";
   import { FileUtils } from "$/utils/file_utils";
   import MdIcon from "$/components/basic/MdIcon.svelte";
-  import { Button } from "$/components/ui";
   import { Toasts } from "$/utils/toasts";
   import { tr } from "$/utils/i18n";
 
@@ -58,14 +57,12 @@
   };
 </script>
 
-<Button size="sm" onclick={onImportClicked}>
+<button type="button" class="element-tile" onclick={onImportClicked}>
   <MdIcon icon="description" />
-
   {$tr("editor.import.pdf")}
-
   {#if importState === "processing"}
     <MdIcon icon="hourglass_top" />
   {:else if importState === "error"}
     <MdIcon icon="warning" class="text-amber-600" />
   {/if}
-</Button>
+</button>
