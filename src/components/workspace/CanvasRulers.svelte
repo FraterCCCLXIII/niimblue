@@ -84,7 +84,6 @@
     ctx.fillStyle = "#7d8b97";
     ctx.strokeStyle = "#8a97a3";
     ctx.font = "9px ui-sans-serif, system-ui, sans-serif";
-    ctx.textBaseline = "middle";
 
     for (let mm = startMm; mm <= endMm; mm++) {
       const pos = origin + mm * pxPerMm;
@@ -93,7 +92,7 @@
       }
       const major = mm % 10 === 0;
       const mid = mm % 5 === 0;
-      const tick = major ? 11 : mid ? 7 : 4;
+      const tick = major ? 8 : mid ? 5 : 3;
 
       ctx.beginPath();
       if (axis === "horizontal") {
@@ -109,13 +108,15 @@
         const label = String(mm);
         if (axis === "horizontal") {
           ctx.textAlign = "center";
-          ctx.fillText(label, pos, 7);
-        } else if (mm !== 0) {
+          ctx.textBaseline = "top";
+          ctx.fillText(label, pos, 1);
+        } else {
           ctx.save();
-          ctx.translate(8, pos);
+          ctx.translate(0, Math.min(Math.max(pos, RULER + 8), cssH - 8));
           ctx.rotate(-Math.PI / 2);
           ctx.textAlign = "center";
-          ctx.fillText(label, 0, 0);
+          ctx.textBaseline = "top";
+          ctx.fillText(label, 0, 1);
           ctx.restore();
         }
       }

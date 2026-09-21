@@ -13,18 +13,17 @@
   import type { ConnectionType } from "$/types";
   import { tr, type TranslationKey } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { Menu } from "$/components/ui";
   import { Toasts } from "$/utils/toasts";
-  import { fixedDropdown } from "$/utils/fixed_dropdown";
   import { onMount } from "svelte";
   import { LocalStoragePersistence } from "$/utils/persistence";
   import type { AppIconName } from "$/utils/lucide_icons";
-  import Dropdown from "bootstrap/js/dist/dropdown";
   import PrinterInfoModal from "$/components/PrinterInfoModal.svelte";
 
   let connectionType = $state<ConnectionType>("bluetooth");
   let featureSupport = $state<AvailableTransports>({ webBluetooth: false, webSerial: false, capacitorBle: false });
   let showInfoModal = $state(false);
-  let triggerEl: HTMLButtonElement | undefined = $state();
+  let menu: { hide: () => void } | undefined = $state();
 
   const transports = $derived(
     (
@@ -80,9 +79,7 @@
   };
 
   const openInfoModal = () => {
-    if (triggerEl) {
-      Dropdown.getInstance(triggerEl)?.hide();
-    }
+    menu?.hide();
     showInfoModal = true;
   };
 
@@ -129,32 +126,30 @@
   });
 </script>
 
-<div class="connect-menu dropdown">
-  <button
-    type="button"
-    bind:this={triggerEl}
-    class="connect-trigger"
-    class:is-connected={connected}
-    class:is-connecting={connecting}
-    data-bs-toggle="dropdown"
-    data-bs-auto-close="true"
-    use:fixedDropdown
-    disabled={connecting || (!connected && !hasTransport)}
-    aria-haspopup="menu">
-    {#if connected}
-      <MdIcon icon={connectionType === "serial" ? "usb" : "bluetooth"} />
-      <span class="connect-trigger__label" class:is-warn={$heartbeatFails > 0}>{printerLabel}</span>
-      {#if $heartbeatData?.chargeLevel}
-        <MdIcon icon={batteryIcon($heartbeatData.chargeLevel)} class="r-90" />
-      {/if}
-    {:else}
-      <MdIcon icon="power" />
-      <span class="connect-trigger__label">{connecting ? $tr("connector.connecting") : $tr("connector.connect")}</span>
-    {/if}
-    <MdIcon icon="expand_more" />
-  </button>
-
-  <div class="dropdown-menu connect-dropdown" role="menu">
+<div class="connect-menu">
+  <Menu bind:this={menu} class="connect-dropdown min-w-[260px] max-w-80 p-1.5 shadow-[0_10px_28px_rgba(17,17,17,0.1)]">
+    {#snippet trigger({ toggle })}
+      <button
+        type="button"
+        class="connect-trigger"
+        class:is-connected={connected}
+        class:is-connecting={connecting}
+        disabled={connecting || (!connected && !hasTransport)}
+        aria-haspopup="menu"
+        onclick={toggle}>
+        {#if connected}
+          <MdIcon icon={connectionType === "serial" ? "usb" : "bluetooth"} />
+          <span class="connect-trigger__label" class:is-warn={$heartbeatFails > 0}>{printerLabel}</span>
+          {#if $heartbeatData?.chargeLevel}
+            <MdIcon icon={batteryIcon($heartbeatData.chargeLevel)} class="r-90" />
+          {/if}
+        {:else}
+          <MdIcon icon="power" />
+          <span class="connect-trigger__label">{connecting ? $tr("connector.connecting") : $tr("connector.connect")}</span>
+        {/if}
+        <MdIcon icon="expand_more" />
+      </button>
+    {/snippet}
     {#if connected}
       <div class="connect-status">
         <div class="connect-status__name">{printerLabel}</div>
@@ -190,7 +185,7 @@
         </button>
       {/each}
     {/if}
-  </div>
+  </Menu>
 </div>
 
 <PrinterInfoModal bind:show={showInfoModal} />
@@ -243,18 +238,9 @@
     color: #c48a00;
   }
 
-  .connect-dropdown {
-    --bs-dropdown-padding-x: 0;
-    --bs-dropdown-padding-y: 0;
-    --bs-dropdown-border-radius: 12px;
-    --bs-dropdown-border-color: var(--ws-line);
-    --bs-dropdown-bg: var(--ws-surface);
+  :global(.connect-dropdown) {
     min-width: 260px;
     max-width: 320px;
-    margin-top: 8px !important;
-    padding: 6px;
-    border-radius: 12px;
-    box-shadow: 0 10px 28px rgba(17, 17, 17, 0.1);
   }
 
   .connect-status {

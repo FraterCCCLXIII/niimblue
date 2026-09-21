@@ -1,5 +1,7 @@
 <script lang="ts">
+  import { InputAddon, InputGroup, SelectField, TextField } from "$/components/ui";
   import { tr } from "$/utils/i18n";
+
   interface Props {
     value: number;
   }
@@ -7,17 +9,17 @@
   let { value = $bindable() }: Props = $props();
 </script>
 
-<div class="input-group flex-nowrap input-group-sm mb-2">
-  <span class="input-group-text">{$tr("params.label.head_density")}</span>
+<InputGroup class="mb-2">
+  <InputAddon>{$tr("params.label.head_density")}</InputAddon>
 
-  <select class="form-select" bind:value>
+  <SelectField class="min-h-8 text-[13px]" bind:value>
     <option value={8}>203dpi</option>
     <option value={11.81}>300dpi</option>
-  </select>
+  </SelectField>
 
-  <input class="form-control" type="number" min="1" bind:value />
+  <TextField class="min-h-8 text-[13px]" type="number" min="1" bind:value />
 
-  <span class="input-group-text cursor-help" title={$tr("params.label.head_density.help")}>
+  <InputAddon class="cursor-help" title={$tr("params.label.head_density.help")}>
     {$tr("params.label.dpmm")}
-  </span>
-</div>
+  </InputAddon>
+</InputGroup>

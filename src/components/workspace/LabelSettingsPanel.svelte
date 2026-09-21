@@ -6,7 +6,6 @@
   import { LocalStoragePersistence } from "$/utils/persistence";
   import { appConfig } from "$/stores";
   import { tr } from "$/utils/i18n";
-  import LabelPropsEditor from "$/components/designer-controls/LabelPropsEditor.svelte";
   import type { PrintDirection } from "@mmote/niimbluelib";
 
   interface Props {
@@ -199,8 +198,3 @@
   <input id="print-range" type="checkbox" checked={!!$appConfig.gridEnabled} onclick={toggleGrid} />
   <span>{$tr("editor.label_settings.grid")}</span>
 </label>
-
-<section class="insp-section">
-  <h3 class="insp-heading">{$tr("editor.label_settings.advanced")}</h3>
-  <LabelPropsEditor {labelProps} {onChange} />
-</section>

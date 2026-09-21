@@ -1,25 +1,21 @@
 <script lang="ts">
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { IconButton } from "$/components/ui";
 
   interface Props {
     propName: string;
-    savedValue: any;
-    value: any;
-    onClick: (key: string, value: any) => void;
+    savedValue: unknown;
+    value: unknown;
+    onClick: (key: string, value: unknown) => void;
   }
 
-  let {
-    propName,
-    savedValue,
-    value,
-    onClick
-  }: Props = $props();
+  let { propName, savedValue, value, onClick }: Props = $props();
 </script>
 
-<button class="btn btn-sm btn-outline-secondary param-lock-btn" onclick={() => onClick(propName, value)}>
+<IconButton class="param-lock-btn size-8 rounded-none" onclick={() => onClick(propName, value)}>
   {#if savedValue !== undefined}
-    <MdIcon icon="lock" class="text-warning" />
+    <MdIcon icon="lock" class="text-amber-600" />
   {:else}
     <MdIcon icon="lock_open" />
   {/if}
-</button>
+</IconButton>

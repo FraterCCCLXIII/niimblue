@@ -3,32 +3,22 @@
   import type { AppIconName } from "$/utils/lucide_icons";
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
-  import CustomScroll from "$/components/basic/CustomScroll.svelte";
   import IconPicker from "$/components/designer-controls/IconPicker.svelte";
-  import CsvControl from "$/components/designer-controls/CsvControl.svelte";
   import PdfImportButton from "$/components/designer-controls/PdfImportButton.svelte";
   import ZplImportButton from "$/components/designer-controls/ZplImportButton.svelte";
 
   interface Props {
     labelProps: LabelProps;
-    csvEnabled: boolean;
     onPick: (type: OjectType) => void;
     onSvgIconPicked: (svg: string) => void;
-    onCsvPlaceholderPicked: (name: string) => void;
-    onCsvImported?: () => void;
-    onCsvCleared?: () => void;
     zplImageReady: (img: Blob) => void;
     pdfImageReady: (img: HTMLCanvasElement) => void;
   }
 
   let {
     labelProps,
-    csvEnabled = $bindable(),
     onPick,
     onSvgIconPicked,
-    onCsvPlaceholderPicked,
-    onCsvImported,
-    onCsvCleared,
     zplImageReady,
     pdfImageReady,
   }: Props = $props();
@@ -60,7 +50,7 @@
   };
 </script>
 
-<CustomScroll class="designer-side">
+<div class="element-palette">
   <h3>{$tr("editor.elements")}</h3>
   <div class="element-grid">
     {#each leadTiles as tile (tile.type)}
@@ -86,16 +76,7 @@
       <ZplImportButton {labelProps} onImageReady={zplImageReady} />
     </div>
   </div>
-
-  <h3 class="mt-4">{$tr("editor.data_source")}</h3>
-  <div class="data-source">
-    <CsvControl
-      bind:enabled={csvEnabled}
-      onPlaceholderPicked={onCsvPlaceholderPicked}
-      onImported={onCsvImported}
-      onCleared={onCsvCleared} />
-  </div>
-</CustomScroll>
+</div>
 
 <style>
   .tile-embed {
@@ -118,11 +99,5 @@
     align-items: center;
     gap: 6px;
     font-size: 12px;
-  }
-
-  .data-source {
-    display: flex;
-    flex-direction: column;
-    gap: 10px;
   }
 </style>

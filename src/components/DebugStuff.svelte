@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppModal from "$/components/basic/AppModal.svelte";
   import { appConfig } from "$/stores";
+  import { Button } from "$/components/ui";
   import { tr } from "$/utils/i18n";
   import { NIIMBOT_CLIENT_DEFAULTS } from "@mmote/niimbluelib";
 
@@ -18,9 +19,9 @@
         placeholder={`${NIIMBOT_CLIENT_DEFAULTS.packetIntervalMs}`}
         bind:value={$appConfig.packetIntervalMs} />
       <span class="ws-suffix">ms</span>
-      <button type="button" class="ws-btn" onclick={() => ($appConfig.packetIntervalMs = undefined)}>
+      <Button onclick={() => ($appConfig.packetIntervalMs = undefined)}>
         {$tr("debug.reset")}
-      </button>
+      </Button>
     </div>
   </section>
 
@@ -29,9 +30,9 @@
     <div class="ws-field-row">
       <input class="insp-field" type="number" min="0" placeholder="0" bind:value={$appConfig.pageDelay} />
       <span class="ws-suffix">ms</span>
-      <button type="button" class="ws-btn" onclick={() => ($appConfig.pageDelay = undefined)}>
+      <Button onclick={() => ($appConfig.pageDelay = undefined)}>
         {$tr("debug.reset")}
-      </button>
+      </Button>
     </div>
   </section>
 </AppModal>

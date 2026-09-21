@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppModal from "$/components/basic/AppModal.svelte";
   import { get } from "svelte/store";
+  import { Button } from "$/components/ui";
   import { tr } from "$/utils/i18n";
 
   interface Props {
@@ -63,9 +64,9 @@
     </label>
 
     {#snippet footer()}
-      <button type="button" class="ws-btn ws-btn-primary" onclick={confirm} disabled={!draft.trim()}>
+      <Button variant="primary" onclick={confirm} disabled={!draft.trim()}>
         {$tr("editor.rename.action")}
-      </button>
+      </Button>
     {/snippet}
   </AppModal>
 {/if}

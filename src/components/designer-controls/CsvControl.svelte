@@ -3,9 +3,7 @@
   import { Toasts } from "$/utils/toasts";
   import { tr } from "$/utils/i18n";
   import {
-    CSV_FIELD_MIME,
     csvFileTitle,
-    csvVariableToken,
     parseCsvTable,
     serializeCsvTable,
     type CsvImportResult,
@@ -16,12 +14,11 @@
 
   interface Props {
     enabled: boolean;
-    onPlaceholderPicked: (name: string) => void;
     onImported?: () => void;
     onCleared?: () => void;
   }
 
-  let { enabled = $bindable(), onPlaceholderPicked, onImported, onCleared }: Props = $props();
+  let { enabled = $bindable(), onImported, onCleared }: Props = $props();
 
   let fileInput: HTMLInputElement | undefined = $state();
   let showTable = $state(false);
@@ -30,9 +27,6 @@
   let pendingSource = $state("");
   let pendingSelected = $state<number[]>([]);
   let pendingPrintNames = $state(false);
-
-  const table = $derived(parseCsvTable($csvData.data));
-  const columns = $derived(table.columns);
 
   const openPicker = () => {
     fileInput?.click();
@@ -110,15 +104,6 @@
     enabled = false;
     onCleared?.();
   };
-
-  const onFieldDragStart = (event: DragEvent, name: string) => {
-    if (!event.dataTransfer) {
-      return;
-    }
-    event.dataTransfer.setData(CSV_FIELD_MIME, name);
-    event.dataTransfer.setData("text/plain", csvVariableToken(name));
-    event.dataTransfer.effectAllowed = "copy";
-  };
 </script>
 
 <input
@@ -128,41 +113,14 @@
   accept=".csv,text/csv"
   onchange={(event) => void onFileChosen(event)} />
 
-{#if !enabled || columns.length === 0}
-  <button type="button" class="ws-btn" onclick={openPicker}>
-    {$tr("editor.data_source.import")}
+<button type="button" class="csv-source-btn" onclick={openCurrentTable}>
+  <MdIcon icon="dataset" />
+  {$tr("editor.data_source")}
+</button>
+{#if enabled}
+  <button type="button" class="csv-source-btn csv-source-btn--icon" title={$tr("params.csv.cancel")} onclick={clearSource}>
+    <MdIcon icon="close" />
   </button>
-  <p>{$tr("editor.data_source.help")}</p>
-{:else}
-  <div class="csv-source">
-    <div class="csv-source__head">
-      <strong>{$csvData.name || $tr("editor.data_source.csv")}</strong>
-      <button type="button" class="csv-source__link" onclick={clearSource}>{$tr("params.csv.cancel")}</button>
-    </div>
-    <button type="button" class="csv-source__card" onclick={openPicker}>
-      <span>{$csvData.name || $tr("editor.data_source.csv")}</span>
-      <MdIcon icon="swap_horiz" />
-    </button>
-    <button type="button" class="csv-source__card" onclick={openCurrentTable}>
-      <span>{table.rows.length} {$tr("params.csv.rows_selected")}</span>
-      <MdIcon icon="chevron_right" />
-    </button>
-    <p>{$tr("params.csv.drag_fields")}</p>
-    <div class="csv-fields">
-      {#each columns as column (column)}
-        <button
-          type="button"
-          class="csv-field"
-          draggable="true"
-          ondragstart={(event) => onFieldDragStart(event, column)}
-          onclick={() => onPlaceholderPicked(column)}>
-          <MdIcon icon="tag" />
-          <span>{column}</span>
-          <MdIcon icon="density_medium" />
-        </button>
-      {/each}
-    </div>
-  </div>
 {/if}
 
 <CsvImportModal
@@ -178,63 +136,29 @@
     display: none;
   }
 
-  .csv-source,
-  .csv-fields {
-    display: flex;
-    flex-direction: column;
-    gap: 8px;
-  }
-
-  .csv-source__head {
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-  }
-
-  .csv-source__head strong {
-    font-size: 13px;
-    font-weight: 600;
-  }
-
-  .csv-source__link {
+  .csv-source-btn {
     appearance: none;
-    border: 0;
-    background: transparent;
-    color: var(--ws-accent);
-    font-size: 12px;
-    padding: 0;
-  }
-
-  .csv-source__card,
-  .csv-field {
-    appearance: none;
-    width: 100%;
-    border: 1px solid var(--ws-line);
-    border-radius: 10px;
-    background: #f7f9fc;
+    border: 1px solid #e4e4e4;
+    border-radius: 999px;
+    background: #fff;
+    box-shadow: var(--ws-shadow);
     color: var(--ws-text);
-    min-height: 40px;
-    padding: 8px 12px;
-    display: flex;
+    min-height: 36px;
+    padding: 0 16px;
+    font-size: 14px;
+    display: inline-flex;
     align-items: center;
-    justify-content: space-between;
-    gap: 8px;
-    font-size: 13px;
-    text-align: left;
+    gap: 6px;
+    white-space: nowrap;
   }
 
-  .csv-field {
-    cursor: grab;
+  .csv-source-btn:hover {
+    background: var(--ws-hover);
   }
 
-  .csv-field span {
-    flex: 1;
-  }
-
-  p {
-    color: var(--ws-muted);
-    font-size: 12px;
-    margin: 0;
+  .csv-source-btn--icon {
+    width: 36px;
+    padding: 0;
+    justify-content: center;
   }
 </style>

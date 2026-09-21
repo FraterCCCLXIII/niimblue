@@ -2,6 +2,7 @@
   import { SoundSettingsItemType } from "@mmote/niimbluelib";
   import AppModal from "$/components/basic/AppModal.svelte";
   import FirmwareUpdater from "$/components/basic/FirmwareUpdater.svelte";
+  import { Button } from "$/components/ui";
   import {
     heartbeatData,
     printerClient,
@@ -94,17 +95,17 @@
 
     <details class="info-block" open={!!$rfidInfo}>
       <summary>{$tr("connector.info.rfid")}</summary>
-      <button type="button" class="ws-btn info-update" onclick={refreshRfidInfo}>
+      <Button class="mb-2.5" onclick={refreshRfidInfo}>
         {$tr("connector.info.update")}
-      </button>
+      </Button>
       {@render infoList($rfidInfo)}
     </details>
 
     <details class="info-block" open={!!$ribbonRfidInfo}>
       <summary>{$tr("connector.info.ribbon_rfid")}</summary>
-      <button type="button" class="ws-btn info-update" onclick={refreshRfidInfo}>
+      <Button class="mb-2.5" onclick={refreshRfidInfo}>
         {$tr("connector.info.update")}
-      </button>
+      </Button>
       {@render infoList($ribbonRfidInfo)}
     </details>
 
@@ -121,12 +122,12 @@
     <details class="info-block">
       <summary>{$tr("connector.info.tests")}</summary>
       <div class="info-tests">
-        <button type="button" class="ws-btn" onclick={startHeartbeat}>{$tr("connector.info.heartbeat_on")}</button>
-        <button type="button" class="ws-btn" onclick={stopHeartbeat}>{$tr("connector.info.heartbeat_off")}</button>
-        <button type="button" class="ws-btn" onclick={soundOn}>{$tr("connector.info.sound_on")}</button>
-        <button type="button" class="ws-btn" onclick={soundOff}>{$tr("connector.info.sound_off")}</button>
-        <button type="button" class="ws-btn" onclick={fetchInfo}>{$tr("connector.info.fetch")}</button>
-        <button type="button" class="ws-btn" onclick={reset}>{$tr("connector.info.reset")}</button>
+        <Button onclick={startHeartbeat}>{$tr("connector.info.heartbeat_on")}</Button>
+        <Button onclick={stopHeartbeat}>{$tr("connector.info.heartbeat_off")}</Button>
+        <Button onclick={soundOn}>{$tr("connector.info.sound_on")}</Button>
+        <Button onclick={soundOff}>{$tr("connector.info.sound_off")}</Button>
+        <Button onclick={fetchInfo}>{$tr("connector.info.fetch")}</Button>
+        <Button onclick={reset}>{$tr("connector.info.reset")}</Button>
       </div>
     </details>
   </AppModal>
@@ -213,21 +214,13 @@
     font-size: 13px;
   }
 
-  .info-update {
-    margin-bottom: 10px;
-    min-height: 32px;
-    padding: 0 12px;
-    border-radius: 8px;
-    font-size: 12px;
-  }
-
   .info-tests {
     display: flex;
     flex-wrap: wrap;
     gap: 6px;
   }
 
-  .info-tests .ws-btn {
+  .info-tests :global(button) {
     min-height: 32px;
     padding: 0 10px;
     border-radius: 8px;

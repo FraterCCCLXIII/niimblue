@@ -1,5 +1,6 @@
 <script lang="ts">
   import type { FirmwareProgressEvent } from "@mmote/niimbluelib";
+  import { Button, InputAddon, InputGroup, TextField } from "$/components/ui";
   import { printerClient } from "$/stores";
   import { Toasts } from "$/utils/toasts";
   import { FileUtils } from "$/utils/file_utils";
@@ -18,7 +19,7 @@
     const match = fwName.match(/(\d+\.\d+)/);
 
     // For modern firmware images version is stored in header
-    if (fwData.length >= 0x1C && fwData[0] === 0x18) {
+    if (fwData.length >= 0x1c && fwData[0] === 0x18) {
       const verNumber = (fwData[0x15] << 8) + fwData[0x14];
       fwVersion = (verNumber / 100).toFixed(2);
     } else if (match) {
@@ -66,21 +67,22 @@
 </script>
 
 <div class="firmware-updater">
-  <div class="input-group input-group-sm">
+  <InputGroup>
     {#if fwProgress}
-      <span class="input-group-text">Uploading {fwProgress}</span>
+      <InputAddon>Uploading {fwProgress}</InputAddon>
     {:else}
-      <span class="input-group-text">To</span>
-      <button class="btn btn-sm btn-secondary" title={fwName} onclick={browseFw} disabled={!!fwProgress}>
+      <InputAddon>To</InputAddon>
+      <Button size="sm" pill={false} title={fwName} onclick={browseFw} disabled={!!fwProgress}>
         {fwName.length > 0 ? fwName.slice(0, 8) + "..." : "Browse..."}
-      </button>
-      <span class="input-group-text">ver.</span>
-      <input class="form-control" placeholder="x.x" type="text" size="6" bind:value={fwVersion} />
-
-      <button
-        class="btn btn-sm btn-danger"
+      </Button>
+      <InputAddon>ver.</InputAddon>
+      <TextField class="min-h-8 w-16 text-[13px]" placeholder="x.x" type="text" bind:value={fwVersion} />
+      <Button
+        size="sm"
+        pill={false}
+        variant="danger"
         onclick={upgradeFw}
-        disabled={!!fwProgress || !fwVersionValid || fwData === undefined}>Burn</button>
+        disabled={!!fwProgress || !fwVersionValid || fwData === undefined}>Burn</Button>
     {/if}
-  </div>
+  </InputGroup>
 </div>

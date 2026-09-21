@@ -3,13 +3,13 @@
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import { detectAntiFingerprinting } from "$/utils/browsers";
-  let caps = Utils.getAvailableTransports();
 
+  let caps = Utils.getAvailableTransports();
   let antiFingerprinting = detectAntiFingerprinting();
 </script>
 
 {#if !caps.webSerial && !caps.webBluetooth && !caps.capacitorBle}
-  <div class="alert alert-danger" role="alert">
+  <div class="rounded-[10px] border border-danger-border bg-danger-soft px-3 py-2.5 text-danger-text" role="alert">
     <div>
       {$tr("browser_warning.lines.first")}
       <MdIcon icon="sentiment_very_dissatisfied" />
@@ -21,10 +21,7 @@
 {/if}
 
 {#if antiFingerprinting}
-  <div class="alert alert-danger" role="alert">
+  <div class="rounded-[10px] border border-danger-border bg-danger-soft px-3 py-2.5 text-danger-text" role="alert">
     {$tr("browser_warning.fingerprinting")}
   </div>
 {/if}
-
-<style>
-</style>

@@ -2,6 +2,7 @@
   import { onDestroy } from "svelte";
   import AppModal from "$/components/basic/AppModal.svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { Button } from "$/components/ui";
   import { tr as translate } from "$/utils/i18n";
   import {
     parseCopyCount,
@@ -287,10 +288,10 @@
 
     {#snippet footer()}
       <div class="adv-print__footer">
-        <button type="button" class="ws-btn" onclick={onCancel}>{$translate("params.csv.cancel")}</button>
-        <button type="button" class="ws-btn ws-btn-primary" disabled={selectedCount === 0} onclick={confirm}>
+        <Button onclick={onCancel}>{$translate("params.csv.cancel")}</Button>
+        <Button variant="primary" disabled={selectedCount === 0} onclick={confirm}>
           {$translate("params.csv.confirm")}
-        </button>
+        </Button>
       </div>
     {/snippet}
   </AppModal>

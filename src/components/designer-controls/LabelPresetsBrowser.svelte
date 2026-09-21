@@ -40,28 +40,28 @@
 </script>
 
 <CustomScroll class="preset-browser border {className}">
-  <div class="d-flex p-2 gap-1 flex-wrap">
+  <div class="flex flex-wrap gap-1 p-2">
   <!-- fixme: key -->
   {#each presets as item, idx (item)}
     <div
       role="button"
-      class="btn p-0 card-wrapper d-flex justify-content-center align-items-center"
+      class="card-wrapper flex items-center justify-center p-0"
       tabindex="0"
       onkeydown={() => onItemSelected(idx)}
       onclick={() => onItemSelected(idx)}>
       <div
-        class="card print-start-{item.printDirection} d-flex justify-content-center align-items-center"
+        class="card print-start-{item.printDirection} flex items-center justify-center"
         style="width: {scaleDimensions(item).width}%; height: {scaleDimensions(item).height}%;">
-        <div class="remove d-flex">
+        <div class="remove flex">
           {#if deleteIndex === idx}
-            <button class="remove btn text-danger-emphasis" onclick={(e) => deleteConfirmed(e, idx)}>
+            <button type="button" class="remove text-danger" onclick={(e) => deleteConfirmed(e, idx)}>
               <MdIcon icon="delete" />
             </button>
-            <button class="remove btn text-success" onclick={(e) => deleteRejected(e)}>
+            <button type="button" class="remove text-emerald-600" onclick={(e) => deleteRejected(e)}>
               <MdIcon icon="close" />
             </button>
           {:else}
-            <button class="remove btn text-danger-emphasis" onclick={(e) => deleteRequested(e, idx)}>
+            <button type="button" class="remove text-danger" onclick={(e) => deleteRequested(e, idx)}>
               <MdIcon icon="delete" />
             </button>
           {/if}

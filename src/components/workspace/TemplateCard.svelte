@@ -4,8 +4,7 @@
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
   import LabelPreview from "$/components/workspace/LabelPreview.svelte";
-  import { fixedDropdown } from "$/utils/fixed_dropdown";
-  import Dropdown from "bootstrap/js/dist/dropdown";
+  import { Menu, MenuItem } from "$/components/ui";
 
   interface Props {
     label: ExportedLabelTemplate;
@@ -21,15 +20,12 @@
 
   let { label, printCount = 0, lastQuantity = 0, onSelect, onRename, onDuplicate, onDelete, onExport, onPrint }: Props = $props();
 
-  let moreBtn: HTMLButtonElement | undefined = $state();
+  let menu: { show: () => void } | undefined = $state();
 
   const showCardMenu = (event: MouseEvent) => {
     event.preventDefault();
     event.stopPropagation();
-    if (!moreBtn) {
-      return;
-    }
-    Dropdown.getInstance(moreBtn)?.show();
+    menu?.show();
   };
 
   const onCardClick = (event: MouseEvent) => {
@@ -61,50 +57,39 @@
       </div>
     </button>
 
-    <div class="dropdown template-card__more">
-      <button
-        type="button"
-        bind:this={moreBtn}
-        class="template-card__more-btn"
-        data-bs-toggle="dropdown"
-        data-bs-auto-close="true"
-        use:fixedDropdown
-        title={$tr("editor.more")}
-        aria-label={$tr("editor.more")}
-        onclick={(event) => event.stopPropagation()}>
-        <MdIcon icon="more_horiz" />
-      </button>
-      <div class="dropdown-menu dropdown-menu-end">
-        <button type="button" class="dropdown-item" onclick={() => onSelect?.()}>
-          {$tr("library.open")}
-        </button>
-        {#if onRename}
-          <button type="button" class="dropdown-item" onclick={() => onRename()}>
-            {$tr("library.rename")}
+    <div class="template-card__more">
+      <Menu bind:this={menu}>
+        {#snippet trigger({ toggle })}
+          <button
+            type="button"
+            class="template-card__more-btn"
+            title={$tr("editor.more")}
+            aria-label={$tr("editor.more")}
+            onclick={(event) => {
+              event.stopPropagation();
+              toggle();
+            }}>
+            <MdIcon icon="more_horiz" />
           </button>
+        {/snippet}
+        <MenuItem onclick={() => onSelect?.()}>{$tr("library.open")}</MenuItem>
+        {#if onRename}
+          <MenuItem onclick={() => onRename()}>{$tr("library.rename")}</MenuItem>
         {/if}
         {#if onDuplicate}
-          <button type="button" class="dropdown-item" onclick={() => onDuplicate()}>
-            {$tr("library.duplicate")}
-          </button>
+          <MenuItem onclick={() => onDuplicate()}>{$tr("library.duplicate")}</MenuItem>
         {/if}
         {#if onExport}
-          <button type="button" class="dropdown-item" onclick={() => onExport()}>
-            {$tr("editor.export")}
-          </button>
+          <MenuItem onclick={() => onExport()}>{$tr("editor.export")}</MenuItem>
         {/if}
         {#if onPrint}
-          <button type="button" class="dropdown-item" onclick={() => onPrint()}>
-            {$tr("editor.print")}
-          </button>
+          <MenuItem onclick={() => onPrint()}>{$tr("editor.print")}</MenuItem>
         {/if}
         {#if onDelete}
-          <div class="dropdown-divider"></div>
-          <button type="button" class="dropdown-item text-danger" onclick={() => onDelete()}>
-            {$tr("library.delete")}
-          </button>
+          <div class="my-1 h-px bg-line"></div>
+          <MenuItem danger onclick={() => onDelete()}>{$tr("library.delete")}</MenuItem>
         {/if}
-      </div>
+      </Menu>
     </div>
   </div>
 </div>

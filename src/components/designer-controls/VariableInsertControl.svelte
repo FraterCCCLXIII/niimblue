@@ -2,7 +2,7 @@
   import * as fabric from "fabric";
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
-  import { fixedDropdown } from "$/utils/fixed_dropdown";
+  import { Button, Menu } from "$/components/ui";
   import { csvVariableToken } from "$/utils/csv_source";
   import { getBoundText, setBoundText } from "$/utils/csv_preview";
 
@@ -32,83 +32,60 @@
   };
 </script>
 
-<div class="btn-group btn-group-sm" role="group" title={$tr("params.variables.insert")}>
-  <button
-    class="btn btn-sm btn-secondary dropdown-toggle"
-    data-bs-toggle="dropdown"
-    data-bs-auto-close="outside"
-    use:fixedDropdown>
-    <MdIcon icon="data_object" />
-  </button>
-
-  <div class="dropdown-menu px-2 variable-menu">
-    {#if csvColumns.length > 0}
-      <div class="variable-menu__section">
-        <div class="variable-menu__label">{$tr("params.variables.csv")}</div>
-        <div class="d-flex gap-1 flex-wrap">
-          {#each csvColumns as column (column)}
-            <button
-              type="button"
-              class="btn btn-secondary btn-sm"
-              onmousedown={(event) => {
-                event.preventDefault();
-                insertToken(csvVariableToken(column));
-              }}>
-              {column}
-            </button>
-          {/each}
-        </div>
+<Menu closeOnSelect={false} class="min-w-56 p-2">
+  {#snippet trigger({ toggle })}
+    <Button size="sm" pill={false} title={$tr("params.variables.insert")} onclick={toggle}>
+      <MdIcon icon="data_object" />
+    </Button>
+  {/snippet}
+  {#if csvColumns.length > 0}
+    <div class="mb-2 border-b border-line pb-2">
+      <div class="mb-1.5 text-[11px] text-muted">{$tr("params.variables.csv")}</div>
+      <div class="flex flex-wrap gap-1">
+        {#each csvColumns as column (column)}
+          <Button
+            size="sm"
+            pill={false}
+            onmousedown={(event) => {
+              event.preventDefault();
+              insertToken(csvVariableToken(column));
+            }}>
+            {column}
+          </Button>
+        {/each}
       </div>
-    {/if}
-    <div class="d-flex gap-1 flex-wrap">
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm"
-        onmousedown={(event) => {
-          event.preventDefault();
-          insertDateTime();
-        }}>
-        <MdIcon icon="calendar_today" />
-        {$tr("params.variables.insert.datetime")}
-      </button>
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm"
-        onmousedown={(event) => {
-          event.preventDefault();
-          insertDateTime("YYYY-MM-DD");
-        }}>
-        <MdIcon icon="calendar_today" />
-        {$tr("params.variables.insert.date")}
-      </button>
-      <button
-        type="button"
-        class="btn btn-secondary btn-sm"
-        onmousedown={(event) => {
-          event.preventDefault();
-          insertDateTime("HH:mm:ss");
-        }}>
-        <MdIcon icon="schedule" />
-        {$tr("params.variables.insert.time")}
-      </button>
     </div>
+  {/if}
+  <div class="flex flex-wrap gap-1">
+    <Button
+      size="sm"
+      pill={false}
+      onmousedown={(event) => {
+        event.preventDefault();
+        insertDateTime();
+      }}>
+      <MdIcon icon="calendar_today" />
+      {$tr("params.variables.insert.datetime")}
+    </Button>
+    <Button
+      size="sm"
+      pill={false}
+      onmousedown={(event) => {
+        event.preventDefault();
+        insertDateTime("YYYY-MM-DD");
+      }}>
+      <MdIcon icon="calendar_today" />
+      {$tr("params.variables.insert.date")}
+    </Button>
+    <Button
+      size="sm"
+      pill={false}
+      onmousedown={(event) => {
+        event.preventDefault();
+        insertDateTime("HH:mm:ss");
+      }}>
+      <MdIcon icon="schedule" />
+      {$tr("params.variables.insert.time")}
+    </Button>
   </div>
-</div>
-
-<style>
-  .variable-menu {
-    min-width: 220px;
-  }
-
-  .variable-menu__section {
-    margin-bottom: 8px;
-    padding-bottom: 8px;
-    border-bottom: 1px solid var(--ws-line);
-  }
-
-  .variable-menu__label {
-    font-size: 11px;
-    color: var(--ws-muted);
-    margin-bottom: 6px;
-  }
-</style>
+</Menu>

@@ -48,8 +48,17 @@
   const background = $derived(String(selectedText.backgroundColor || "transparent").toLowerCase());
   const isReversed = $derived(background !== "" && background !== "transparent" && background !== "white" && background !== "#ffffff");
   const printColor = $derived(isRed ? printRed : "black");
-  const kerningValue = $derived(Math.round((selectedText.charSpacing ?? 0) / 10));
-  const spacingValue = $derived(Math.round(((selectedText.lineHeight ?? 1) - 1) * 10));
+  const lineHeightPercent = $derived(Math.round((selectedText.lineHeight ?? 1) * 100));
+  const letterSpacingPercent = $derived(Math.round((selectedText.charSpacing ?? 0) / 10));
+  const textStyle = $derived<"regular" | "italic" | "bold" | "bold_italic">(
+    selectedText.fontWeight === "bold"
+      ? selectedText.fontStyle === "italic"
+        ? "bold_italic"
+        : "bold"
+      : selectedText.fontStyle === "italic"
+        ? "italic"
+        : "regular",
+  );
   const sizeOptions = $derived(
     fontSizes.includes(Math.round(selectedText.fontSize))
       ? fontSizes
@@ -60,16 +69,23 @@
     apply({ textAlign: align });
   };
 
-  const toggleBold = () => {
-    apply({ fontWeight: selectedText.fontWeight === "bold" ? "normal" : "bold" });
-  };
-
-  const toggleItalic = () => {
-    apply({ fontStyle: selectedText.fontStyle === "italic" ? "normal" : "italic" });
-  };
-
   const toggleUnderline = () => {
     apply({ underline: !selectedText.underline });
+  };
+
+  const setTextStyle = (style: "regular" | "italic" | "bold" | "bold_italic") => {
+    apply({
+      fontWeight: style === "bold" || style === "bold_italic" ? "bold" : "normal",
+      fontStyle: style === "italic" || style === "bold_italic" ? "italic" : "normal",
+    });
+  };
+
+  const setVOrigin = (originY: fabric.TOriginY) => {
+    applyEach((obj) => {
+      const pos = obj.getPointByOrigin(obj.originX ?? "left", obj.originY ?? "top");
+      obj.set({ originY });
+      obj.setPositionByOrigin(pos, obj.originX ?? "left", originY);
+    });
   };
 
   const toggleFontAutoSize = () => {
@@ -85,31 +101,18 @@
     apply({ fontFamily: v });
   };
 
-  const nextFontSize = (size: number, direction: 1 | -1) => {
-    if (direction > 0) {
-      return Math.min(size > 40 ? Math.round(size * 1.1) : size + 2, sizeMax);
-    }
-    return Math.max(size > 40 ? Math.round(size * 0.9) : size - 2, sizeMin);
-  };
-
-  const fontSizeUp = () => {
-    applyEach((obj) => obj.set({ fontSize: nextFontSize(obj.fontSize, 1) }));
-  };
-
-  const fontSizeDown = () => {
-    applyEach((obj) => obj.set({ fontSize: nextFontSize(obj.fontSize, -1) }));
-  };
-
   const fontSizeChange = (v: number) => {
     apply({ fontSize: isNaN(v) ? 1 : Math.min(Math.max(v, sizeMin), sizeMax) });
   };
 
-  const setKerning = (next: number) => {
-    apply({ charSpacing: Math.max(-200, Math.min(200, next * 10)) });
+  const setLineHeightPercent = (next: number) => {
+    const pct = Number.isFinite(next) ? next : 100;
+    apply({ lineHeight: Math.max(0.1, Math.min(10, pct / 100)) });
   };
 
-  const setLineSpacing = (next: number) => {
-    apply({ lineHeight: Math.max(0.1, Math.min(10, 1 + next / 10)) });
+  const setLetterSpacingPercent = (next: number) => {
+    const pct = Number.isFinite(next) ? next : 0;
+    apply({ charSpacing: Math.max(-500, Math.min(2000, pct * 10)) });
   };
 
   const applyPrintColor = (color: string, reversed = isReversed) => {
@@ -155,26 +158,72 @@
 </section>
 
 <section class="insp-section">
-  <h3 class="insp-heading">{$tr("params.text.style")}</h3>
-  <FontFamilyPicker variant="inspector" {editRevision} value={selectedText.fontFamily} valueUpdated={updateFontFamily} />
+  <h3 class="insp-heading">{$tr("params.text.typography")}</h3>
+  <div class="insp-type-stack">
+    <FontFamilyPicker variant="inspector" {editRevision} value={selectedText.fontFamily} valueUpdated={updateFontFamily} />
 
-  <div class="insp-size">
-    <div class="insp-size-step">
-      <button type="button" title={$tr("params.text.font_size.down")} onclick={fontSizeDown}>A-</button>
-      <button type="button" title={$tr("params.text.font_size.up")} onclick={fontSizeUp}>A+</button>
+    <div class="insp-type-pair">
+      <label class="insp-xy">
+        <select
+          aria-label={$tr("params.text.weight")}
+          value={textStyle}
+          onchange={(e) => setTextStyle(e.currentTarget.value as "regular" | "italic" | "bold" | "bold_italic")}>
+          <option value="regular">{$tr("params.text.weight.regular")}</option>
+          <option value="italic">{$tr("params.text.weight.italic")}</option>
+          <option value="bold">{$tr("params.text.weight.bold")}</option>
+          <option value="bold_italic">{$tr("params.text.weight.bold_italic")}</option>
+        </select>
+      </label>
+      <label class="insp-xy">
+        <input
+          type="number"
+          inputmode="numeric"
+          min={sizeMin}
+          max={sizeMax}
+          aria-label={$tr("params.text.font_size")}
+          value={Math.round(selectedText.fontSize)}
+          list="insp-font-sizes"
+          onchange={(e) => fontSizeChange(Number(e.currentTarget.value))} />
+        <datalist id="insp-font-sizes">
+          {#each sizeOptions as size (size)}
+            <option value={size}></option>
+          {/each}
+        </datalist>
+      </label>
     </div>
-    <select
-      class="insp-field insp-select"
-      title={$tr("params.text.font_size")}
-      value={Math.round(selectedText.fontSize)}
-      onchange={(e) => fontSizeChange(Number(e.currentTarget.value))}>
-      {#each sizeOptions as size (size)}
-        <option value={size}>{size}</option>
-      {/each}
-    </select>
+
+    <div class="insp-type-pair">
+      <div class="insp-type-field">
+        <div class="insp-type-label">{$tr("params.text.line_height")}</div>
+        <label class="insp-xy">
+          <span>A</span>
+          <input
+            type="number"
+            inputmode="decimal"
+            aria-label={$tr("params.text.line_height")}
+            value={lineHeightPercent}
+            onchange={(e) => setLineHeightPercent(Number(e.currentTarget.value))} />
+          <span class="insp-xy__suffix">%</span>
+        </label>
+      </div>
+      <div class="insp-type-field">
+        <div class="insp-type-label">{$tr("params.text.letter_spacing")}</div>
+        <label class="insp-xy">
+          <span>|A|</span>
+          <input
+            type="number"
+            inputmode="decimal"
+            aria-label={$tr("params.text.letter_spacing")}
+            value={letterSpacingPercent}
+            onchange={(e) => setLetterSpacingPercent(Number(e.currentTarget.value))} />
+          <span class="insp-xy__suffix">%</span>
+        </label>
+      </div>
+    </div>
   </div>
 
-  <div class="insp-tools">
+  <div class="insp-subhead">{$tr("params.text.alignment")}</div>
+  <div class="insp-tools insp-pos-align">
     <div class="insp-group">
       <button
         type="button"
@@ -197,6 +246,31 @@
         onclick={() => setXAlign("right")}>
         <MdIcon icon="format_align_right" />
       </button>
+    </div>
+    <div class="insp-group">
+      <button
+        type="button"
+        class:is-active={selectedText.originY === "top"}
+        title={$tr("params.text.vorigin.top")}
+        onclick={() => setVOrigin("top")}>
+        <MdIcon icon="vertical_align_top" />
+      </button>
+      <button
+        type="button"
+        class:is-active={selectedText.originY === "center"}
+        title={$tr("params.text.vorigin.center")}
+        onclick={() => setVOrigin("center")}>
+        <MdIcon icon="vertical_align_center" />
+      </button>
+      <button
+        type="button"
+        class:is-active={selectedText.originY === "bottom"}
+        title={$tr("params.text.vorigin.bottom")}
+        onclick={() => setVOrigin("bottom")}>
+        <MdIcon icon="vertical_align_bottom" />
+      </button>
+    </div>
+    <div class="insp-fmt">
       <button
         type="button"
         class:is-active={selectedText.textAlign === "justify"}
@@ -204,42 +278,12 @@
         onclick={() => setXAlign("justify")}>
         <MdIcon icon="format_align_justify" />
       </button>
+      <button type="button" class:is-active={!!selectedText.underline} title={$tr("params.text.underline")} onclick={toggleUnderline}>
+        <MdIcon icon="format_underlined" />
+      </button>
     </div>
   </div>
 </section>
-
-<div class="insp-row">
-  <span class="insp-row__label">{$tr("params.text.formatting")}</span>
-  <div class="insp-fmt">
-    <button type="button" class:is-active={selectedText.fontWeight === "bold"} title={$tr("params.text.bold")} onclick={toggleBold}>
-      <MdIcon icon="format_bold" />
-    </button>
-    <button type="button" class:is-active={!!selectedText.underline} title={$tr("params.text.underline")} onclick={toggleUnderline}>
-      <MdIcon icon="format_underlined" />
-    </button>
-    <button type="button" class:is-active={selectedText.fontStyle === "italic"} title={$tr("params.text.italic")} onclick={toggleItalic}>
-      <MdIcon icon="format_italic" />
-    </button>
-  </div>
-</div>
-
-<div class="insp-row">
-  <span class="insp-row__label">{$tr("params.text.kerning")}</span>
-  <div class="insp-stepper">
-    <button type="button" onclick={() => setKerning(kerningValue - 1)}>-</button>
-    <span>{kerningValue}</span>
-    <button type="button" onclick={() => setKerning(kerningValue + 1)}>+</button>
-  </div>
-</div>
-
-<div class="insp-row">
-  <span class="insp-row__label">{$tr("params.text.line_spacing")}</span>
-  <div class="insp-stepper">
-    <button type="button" onclick={() => setLineSpacing(spacingValue - 1)}>-</button>
-    <span>{spacingValue}</span>
-    <button type="button" onclick={() => setLineSpacing(spacingValue + 1)}>+</button>
-  </div>
-</div>
 
 <section class="insp-section">
   <h3 class="insp-heading">{$tr("params.text.direction")}</h3>

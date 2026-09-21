@@ -5,6 +5,7 @@
   import { applyLabelDimensions, formatPresetSize, labelPropsFromPreset } from "$/utils/label_geometry";
   import { normalizeLabelPrintDirection } from "$/utils/label_template";
   import { LocalStoragePersistence } from "$/utils/persistence";
+  import { Button } from "$/components/ui";
   import { tr } from "$/utils/i18n";
 
   interface Props {
@@ -82,7 +83,7 @@
     {/if}
 
     {#snippet footer()}
-      <button type="button" class="ws-btn ws-btn-primary" onclick={create}>{$tr("library.create.action")}</button>
+      <Button variant="primary" onclick={create}>{$tr("library.create.action")}</Button>
     {/snippet}
   </AppModal>
 {/if}

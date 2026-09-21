@@ -1,7 +1,7 @@
 <script lang="ts">
-  import Modal from "bootstrap/js/dist/modal";
   import { onDestroy, onMount, type Snippet } from "svelte";
   import CustomScroll from "$/components/basic/CustomScroll.svelte";
+  import { cn } from "$/utils/cn";
 
   interface Props {
     show: boolean;
@@ -16,68 +16,85 @@
 
   let { show = $bindable(), title, size = "md", scroll = true, stack = false, onClose, children, footer }: Props = $props();
 
-  let modalEl: HTMLElement;
-  let modal: Modal;
+  let modalEl: HTMLDivElement | undefined = $state();
+  let dismissReady = $state(false);
+
+  const close = () => {
+    if (!dismissReady) {
+      return;
+    }
+    if (onClose) {
+      onClose();
+    }
+    show = false;
+  };
+
+  const onKeydown = (event: KeyboardEvent) => {
+    if (event.key === "Escape") {
+      close();
+    }
+  };
 
   onMount(() => {
-    modal = new Modal(modalEl);
-    modal.show();
-
-    modalEl.addEventListener('hide.bs.modal', () => {
-      if (document.activeElement instanceof HTMLElement) document.activeElement.blur();
+    if (modalEl) {
+      document.body.appendChild(modalEl);
+    }
+    document.addEventListener("keydown", onKeydown);
+    document.body.classList.add("overflow-hidden");
+    requestAnimationFrame(() => {
+      dismissReady = true;
     });
-
-    modalEl.addEventListener("hidden.bs.modal", () => {
-      if (onClose) onClose();
-      show = false;
-    });
-
   });
 
   onDestroy(() => {
-    if (modal) {
-      modal.hide();
-      modal.dispose();
-    }
+    document.removeEventListener("keydown", onKeydown);
+    document.body.classList.remove("overflow-hidden");
+    modalEl?.remove();
   });
 
   export const hide = () => {
-    if (modal) {
-      modal.hide();
-    }
+    close();
   };
 </script>
 
 <div
   bind:this={modalEl}
-  class="modal fade workspace-modal"
-  class:workspace-modal--wide={size === "lg" || size === "xl"}
-  class:workspace-modal--stack={stack}
-  data-bs-theme="light"
-  tabindex="-1"
-  aria-hidden="true">
-  <div class="modal-dialog modal-dialog-centered" class:modal-lg={size === "lg"} class:modal-xl={size === "xl"}>
-    <div class="modal-content">
-      <div class="modal-header">
-        <h1 class="modal-title">{title}</h1>
-        <button aria-label="Dismiss" type="button" class="btn-close" data-bs-dismiss="modal"></button>
-      </div>
+  class={cn("fixed inset-0 z-[1055] flex items-center justify-center p-4", stack && "z-[1070]")}
+  role="presentation">
+  <button type="button" class="absolute inset-0 bg-black/35" aria-label="Dismiss" onclick={close}></button>
+  <div
+    role="dialog"
+    aria-modal="true"
+    aria-label={title}
+    class={cn(
+      "relative flex max-h-[min(90vh,720px)] w-full flex-col overflow-hidden rounded-dialog border border-line bg-surface text-foreground shadow-dialog",
+      size === "md" && "max-w-lg",
+      size === "lg" && "max-w-[min(960px,calc(100vw-32px))]",
+      size === "xl" && "max-w-[min(1100px,calc(100vw-32px))]",
+    )}>
+    <div class="flex items-center justify-between gap-3 border-b border-line px-5 py-3">
+      <h1 class="m-0 text-lg font-semibold text-foreground">{title}</h1>
+      <button
+        type="button"
+        class="inline-flex size-7 items-center justify-center rounded-full text-2xl leading-none text-muted hover:bg-hover hover:text-foreground"
+        aria-label="Dismiss"
+        onclick={close}>×</button>
+    </div>
 
-      <div class="modal-body">
-        {#if scroll}
-          <CustomScroll class="workspace-modal__scroll">
-            {@render children()}
-          </CustomScroll>
-        {:else}
+    <div class={cn("px-5 py-4", size !== "md" && "pt-3")}>
+      {#if scroll}
+        <CustomScroll class="workspace-modal__scroll">
           {@render children()}
-        {/if}
-      </div>
-
-      {#if footer}
-        <div class="modal-footer">
-          {@render footer()}
-        </div>
+        </CustomScroll>
+      {:else}
+        {@render children()}
       {/if}
     </div>
+
+    {#if footer}
+      <div class="flex flex-wrap items-center justify-start gap-2 border-t border-line px-5 py-3">
+        {@render footer()}
+      </div>
+    {/if}
   </div>
 </div>

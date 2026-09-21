@@ -10,9 +10,10 @@
   import TextParamsControls from "$/components/designer-controls/TextParamsControls.svelte";
   import VariableInsertControl from "$/components/designer-controls/VariableInsertControl.svelte";
   import VectorParamsControls from "$/components/designer-controls/VectorParamsControls.svelte";
+  import ObjectPositionControls from "$/components/designer-controls/ObjectPositionControls.svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { IconButton } from "$/components/ui";
   import { tr } from "$/utils/i18n";
-  import { alignObjects, type ObjectAlign } from "$/utils/object_align";
 
   interface Props {
     selectedObject?: fabric.FabricObject;
@@ -49,19 +50,26 @@
   const showVariables = $derived(
     targets.length === 1 && (!!primaryText || !!primaryQr || (primaryBarcode != null && primaryBarcode.encoding === "CODE128B")),
   );
-
-  const alignSelection = (align: ObjectAlign) => {
-    if (targets.length === 0) {
-      return;
-    }
-    alignObjects(targets, align);
-    onValueUpdated();
-  };
 </script>
 
 {#if selectedCount === 0}
   <p class="object-empty">{$tr("editor.object_settings.empty")}</p>
 {:else if selectedObject}
+  <ObjectPositionControls {selectedObject} {editRevision} valueUpdated={onValueUpdated} />
+
+  <section class="insp-section">
+    <h3 class="insp-heading">{$tr("editor.object_settings.arrange")}</h3>
+    <div class="insp-more">
+      <GenericObjectParamsControls {selectedObject} {editRevision} valueUpdated={onValueUpdated} />
+      <IconButton class="size-8 rounded-lg border border-field" onclick={onClone} title={$tr("editor.clone")}>
+        <MdIcon icon="content_copy" />
+      </IconButton>
+      <IconButton class="size-8 rounded-lg bg-danger text-white hover:bg-danger/90" onclick={onDelete} title={$tr("editor.delete")}>
+        <MdIcon icon="delete" />
+      </IconButton>
+    </div>
+  </section>
+
   {#if primaryText}
     <TextParamsControls selectedText={primaryText} {textTargets} {editRevision} {csvVariables} valueUpdated={onValueUpdated} />
   {/if}
@@ -90,57 +98,16 @@
   {#if selectedCount === 1}
     <VectorParamsControls {selectedObject} {editRevision} valueUpdated={onValueUpdated} />
   {/if}
-
-  <section class="insp-section">
-    <h3 class="insp-heading">{$tr("editor.object_settings.align")}</h3>
-    <div class="insp-tools insp-tools--stack">
-      <div class="insp-group">
-        <button type="button" title={$tr("editor.object_settings.align.left")} onclick={() => alignSelection("left")}>
-          <MdIcon icon="align_horizontal_left" />
-        </button>
-        <button type="button" title={$tr("editor.object_settings.align.center")} onclick={() => alignSelection("center")}>
-          <MdIcon icon="align_horizontal_center" />
-        </button>
-        <button type="button" title={$tr("editor.object_settings.align.right")} onclick={() => alignSelection("right")}>
-          <MdIcon icon="align_horizontal_right" />
-        </button>
-      </div>
-      <div class="insp-group">
-        <button type="button" title={$tr("editor.object_settings.align.top")} onclick={() => alignSelection("top")}>
-          <MdIcon icon="align_vertical_top" />
-        </button>
-        <button type="button" title={$tr("editor.object_settings.align.middle")} onclick={() => alignSelection("middle")}>
-          <MdIcon icon="align_vertical_center" />
-        </button>
-        <button type="button" title={$tr("editor.object_settings.align.bottom")} onclick={() => alignSelection("bottom")}>
-          <MdIcon icon="align_vertical_bottom" />
-        </button>
-      </div>
-    </div>
-  </section>
-
-  <section class="insp-section">
-    <h3 class="insp-heading">{$tr("editor.object_settings.arrange")}</h3>
-    <div class="insp-more">
-      <GenericObjectParamsControls {selectedObject} {editRevision} valueUpdated={onValueUpdated} />
-      <button class="btn btn-sm" onclick={onClone} title={$tr("editor.clone")}>
-        <MdIcon icon="content_copy" />
-      </button>
-      <button class="btn btn-sm btn-danger" onclick={onDelete} title={$tr("editor.delete")}>
-        <MdIcon icon="delete" />
-      </button>
-    </div>
-  </section>
 {:else}
   <section class="insp-section">
     <h3 class="insp-heading">{$tr("editor.object_settings.arrange")}</h3>
     <div class="insp-more">
-      <button class="btn btn-sm" onclick={onClone} title={$tr("editor.clone")}>
+      <IconButton class="size-8 rounded-lg border border-field" onclick={onClone} title={$tr("editor.clone")}>
         <MdIcon icon="content_copy" />
-      </button>
-      <button class="btn btn-sm btn-danger" onclick={onDelete} title={$tr("editor.delete")}>
+      </IconButton>
+      <IconButton class="size-8 rounded-lg bg-danger text-white hover:bg-danger/90" onclick={onDelete} title={$tr("editor.delete")}>
         <MdIcon icon="delete" />
-      </button>
+      </IconButton>
     </div>
   </section>
 {/if}

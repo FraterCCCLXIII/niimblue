@@ -8,6 +8,7 @@
   import { FileUtils } from "$/utils/file_utils";
   import { tr } from "$/utils/i18n";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { Button } from "$/components/ui";
   import TemplateCard from "$/components/workspace/TemplateCard.svelte";
   import RenameLabelDialog from "$/components/workspace/RenameLabelDialog.svelte";
   import CustomScroll from "$/components/basic/CustomScroll.svelte";
@@ -142,10 +143,10 @@
 
 <div class="library">
   <aside class="library-nav">
-    <button type="button" class="ws-btn ws-btn-primary mb-3" onclick={onCreate}>
+    <Button variant="primary" class="mb-3" onclick={onCreate}>
       <MdIcon icon="add" />
       {$tr("library.create")}
-    </button>
+    </Button>
     <a class="library-nav__item" class:is-active={section === "recent"} href={libraryHref("recent")}>
       <MdIcon icon="schedule" />
       {$tr("library.recent")}

@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppModal from "$/components/basic/AppModal.svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { Button } from "$/components/ui";
   import { tr as translate } from "$/utils/i18n";
   import {
     cloneCsvTable,
@@ -148,10 +149,10 @@
           <input type="checkbox" bind:checked={printNames} />
           <span>{$translate("params.csv.print_column_names")}</span>
         </label>
-        <button type="button" class="ws-btn" onclick={addRow}>
+        <Button onclick={addRow}>
           <MdIcon icon="add" />
           {$translate("params.csv.add_row")}
-        </button>
+        </Button>
         <label class="csv-import__search">
           <MdIcon icon="search" />
           <input type="search" bind:value={query} placeholder={$translate("params.csv.search")} />
@@ -223,10 +224,10 @@
 
     {#snippet footer()}
       <div class="csv-import__footer">
-        <button type="button" class="ws-btn" onclick={onCancel}>{$translate("params.csv.cancel")}</button>
-        <button type="button" class="ws-btn ws-btn-primary" disabled={selectedCount === 0} onclick={confirm}>
+        <Button onclick={onCancel}>{$translate("params.csv.cancel")}</Button>
+        <Button variant="primary" disabled={selectedCount === 0} onclick={confirm}>
           {$translate("params.csv.confirm")}
-        </button>
+        </Button>
       </div>
     {/snippet}
   </AppModal>

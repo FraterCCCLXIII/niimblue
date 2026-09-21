@@ -199,9 +199,14 @@ export class CustomCanvas extends fabric.Canvas {
   /**
    * Keep the drawing buffer at devicePixelRatio × view zoom so CSS zoom does
    * not stretch label pixels. Print canvases use enableRetinaScaling=false.
+   *
+   * Fabric only multiplies the backstore when this factor is > 1, but control
+   * handles always `setTransform(getRetinaScaling())`. Clamp so zoomed-out
+   * handles stay on the bounding box instead of shrinking off the corners.
    */
   override getRetinaScaling(): number {
-    return super.getRetinaScaling() * (this.virtualZoomRatio ?? 1);
+    const scale = super.getRetinaScaling() * (this.virtualZoomRatio ?? 1);
+    return scale > 1 ? scale : 1;
   }
 
   public virtualZoom(newZoom: number) {

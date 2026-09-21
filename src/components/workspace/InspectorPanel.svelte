@@ -7,11 +7,12 @@
 
   interface Props {
     selectedCount: number;
+    actions?: Snippet;
     label: Snippet;
     object: Snippet;
   }
 
-  let { selectedCount, label, object }: Props = $props();
+  let { selectedCount, actions, label, object }: Props = $props();
 
   let tab = $state<InspectorTab>("label");
 
@@ -21,6 +22,11 @@
 </script>
 
 <aside class="designer-inspector">
+  {#if actions}
+    <div class="inspector-actions">
+      {@render actions()}
+    </div>
+  {/if}
   <div class="inspector-tabs" role="tablist">
     <button
       type="button"

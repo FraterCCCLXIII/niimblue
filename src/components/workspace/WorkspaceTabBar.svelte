@@ -1,6 +1,7 @@
 <script lang="ts">
   import type { Snippet } from "svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { IconButton } from "$/components/ui";
   import CustomScroll from "$/components/basic/CustomScroll.svelte";
   import WindowControls from "$/components/workspace/WindowControls.svelte";
   import { getDesktop } from "$/utils/desktop";
@@ -74,9 +75,9 @@
     {/each}
   </CustomScroll>
 
-  <button type="button" class="workspace-icon-btn" onclick={onCreate} title={$tr("library.create")}>
+  <IconButton onclick={onCreate} title={$tr("library.create")}>
     <MdIcon icon="add" />
-  </button>
+  </IconButton>
 
   <div class="workspace-tabbar__actions">
     {@render children?.()}

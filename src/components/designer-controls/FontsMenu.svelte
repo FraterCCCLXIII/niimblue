@@ -1,6 +1,7 @@
 <script lang="ts">
   import AppModal from "$/components/basic/AppModal.svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { Button } from "$/components/ui";
   import { userFonts } from "$/stores";
   import { FileUtils } from "$/utils/file_utils";
   import { tr } from "$/utils/i18n";
@@ -65,9 +66,9 @@
       {#each $userFonts as font (font.family)}
         <div class="ws-field-row">
           <span class="insp-field font-name" style="font-family: {font.family}">{font.family}</span>
-          <button type="button" class="ws-btn" onclick={() => removeFont(font.family)}>
+          <Button onclick={() => removeFont(font.family)}>
             <MdIcon icon="delete" />
-          </button>
+          </Button>
         </div>
       {:else}
         <p class="ws-help">{$tr("fonts.empty")}</p>
@@ -81,7 +82,7 @@
         <option value="woff2">woff2</option>
       </select>
       <input class="insp-field" type="text" placeholder={$tr("fonts.title_override")} bind:value={overrideFamily} />
-      <button type="button" class="ws-btn" onclick={browseFont}>{$tr("fonts.browse")}</button>
+      <Button onclick={browseFont}>{$tr("fonts.browse")}</Button>
     </div>
 
     {#snippet footer()}

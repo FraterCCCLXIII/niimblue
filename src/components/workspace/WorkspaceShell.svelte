@@ -15,9 +15,11 @@
   import WorkspaceTabBar from "$/components/workspace/WorkspaceTabBar.svelte";
   import PrinterConnector from "$/components/PrinterConnector.svelte";
   import SettingsDialog from "$/components/workspace/SettingsDialog.svelte";
+  import SavedLabelsDialog from "$/components/workspace/SavedLabelsDialog.svelte";
   import BrowserWarning from "$/components/basic/BrowserWarning.svelte";
   import DebugStuff from "$/components/DebugStuff.svelte";
   import MdIcon from "$/components/basic/MdIcon.svelte";
+  import { IconButton } from "$/components/ui";
   import { automation } from "$/stores";
   import type { ExportedLabelTemplate, LabelProps, WorkspaceTabState } from "$/types";
   import { emptyLabelTemplate } from "$/utils/starter_templates";
@@ -51,6 +53,7 @@
   let createOpen = $state(false);
   let debugStuffShow = $state(bootRoute?.name === "debug");
   let settingsOpen = $state(bootRoute?.name === "settings");
+  let savedLabelsOpen = $state(false);
   let designer = $state<LabelDesigner | undefined>();
   let lastContentRoute = $state<AppRoute>(
     view === "editor" ? { name: "editor", tabId: activeTabId ?? undefined } : { name: "library", section },
@@ -347,7 +350,7 @@
   });
 </script>
 
-<div class="workspace" data-bs-theme="light">
+<div class="workspace">
   <WorkspaceTabBar
     tabs={tabs.map((tab) => ({ id: tab.id, title: tab.title }))}
     {activeTabId}
@@ -356,9 +359,15 @@
     onClose={closeTab}
     onCreate={() => (createOpen = true)}>
     <PrinterConnector />
-    <a href={settingsHref()} class="workspace-icon-btn" title={$tr("settings.title")}>
+    <IconButton
+      title={$tr("params.saved_labels.menu_title")}
+      aria-label={$tr("params.saved_labels.menu_title")}
+      onclick={() => (savedLabelsOpen = true)}>
+      <MdIcon icon="sd_storage" />
+    </IconButton>
+    <IconButton href={settingsHref()} title={$tr("settings.title")}>
       <MdIcon icon="settings" />
-    </a>
+    </IconButton>
   </WorkspaceTabBar>
 
   <div class="px-3">
@@ -392,6 +401,19 @@
   </div>
 
   <CreateLabelDialog bind:show={createOpen} onCreate={createLabel} />
+  <SavedLabelsDialog
+    bind:show={savedLabelsOpen}
+    canUseCurrent={view === "editor" && !!designer}
+    csvEnabled={view === "editor" && !!designer?.getCsvEnabled()}
+    onRequestLabelTemplate={() => designer!.getSnapshot()}
+    onLoadRequested={(label) => {
+      savedLabelsOpen = false;
+      void openLabel(label);
+    }}
+    onExportPng={() => designer?.exportPng()}
+    onChanged={() => {
+      libraryRevision += 1;
+    }} />
   <SettingsDialog
     bind:show={settingsOpen}
     commit={appCommit}

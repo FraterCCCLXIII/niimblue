@@ -24,6 +24,7 @@
   import { CustomCanvas } from "$/fabric-object/custom_canvas";
   import { FileUtils } from "$/utils/file_utils";
   import AppModal from "$/components/basic/AppModal.svelte";
+  import { Button, InputAddon, InputGroup, SelectField, TextField } from "$/components/ui";
   import AdvancedPrintModal from "$/components/AdvancedPrintModal.svelte";
   import { normalizeLabelPrintDirection } from "$/utils/label_template";
   import { fitPrintCanvas, printerScale } from "$/utils/print_raster";
@@ -65,7 +66,7 @@
   let density = $state<number>($printerMeta?.densityDefault ?? 3);
   let speed = $state<0 | 1>(1);
   let quantity = $state<number>(1);
-  let postProcessType = $state<PostProcessType>();
+  let postProcessType = $state<PostProcessType>("threshold");
   let postProcessInvert = $state<boolean>(false);
   let postProcessMirror = $state<boolean>(false);
   let thresholdValue = $state<number>(140);
@@ -566,19 +567,19 @@
 </script>
 
 <AppModal title={$tr("preview.title")} onClose={onModalClose} bind:show bind:this={modalRef}>
-  <div class="d-flex justify-content-center">
+  <div class="flex justify-center">
     {#if pagesTotal > 1}
-      <button disabled={printState !== "idle"} class="btn w-100 fs-1" onclick={pageDown}>
+      <Button class="w-full text-4xl" disabled={printState !== "idle"} onclick={pageDown}>
         <MdIcon icon="chevron_left" />
-      </button>
+      </Button>
     {/if}
 
     <canvas class="print-start-{normalizeLabelPrintDirection(labelProps).printDirection}" bind:this={previewCanvas}></canvas>
 
     {#if pagesTotal > 1}
-      <button disabled={printState !== "idle"} class="btn w-100 fs-1" onclick={pageUp}>
+      <Button class="w-full text-4xl" disabled={printState !== "idle"} onclick={pageUp}>
         <MdIcon icon="chevron_right" />
-      </button>
+      </Button>
     {/if}
   </div>
 
@@ -591,23 +592,23 @@
     {#if printState === "printing"}
       <div>
         Printing...
-        <div class="progress" role="progressbar">
-          <div class="progress-bar" style="width: {printProgress}%">{printProgress}%</div>
+        <div class="h-2 overflow-hidden rounded-full bg-hover" role="progressbar">
+          <div class="h-full bg-accent text-[10px] text-white" style="width: {printProgress}%">{printProgress}%</div>
         </div>
       </div>
     {/if}
 
     {#if error}
-      <div class="alert alert-danger" role="alert">{error}</div>
+      <div class="rounded-[10px] border border-danger-border bg-danger-soft px-3 py-2 text-danger-text" role="alert">{error}</div>
     {/if}
   </div>
 
   {#snippet footer()}
-    <div class="input-group input-group-sm">
-      <span class="input-group-text">{$tr("preview.postprocess")}</span>
+    <InputGroup>
+      <InputAddon>{$tr("preview.postprocess")}</InputAddon>
 
-      <select
-        class="form-select"
+      <SelectField
+        class="min-h-8 text-[13px]"
         bind:value={postProcessType}
         onchange={() => updateSavedProp("postProcess", postProcessType, true)}>
         <option value="threshold">{$tr("preview.postprocess.threshold")}</option>
@@ -618,7 +619,7 @@
         <option value="floyd_steinberg">{$tr("preview.postprocess.floyd_steinberg")}</option>
         <option value="jjn">{$tr("preview.postprocess.jjn")}</option>
         <option value="stucki">{$tr("preview.postprocess.stucki")}</option>
-      </select>
+      </SelectField>
 
       <ParamLockButton
         propName="postProcess"
@@ -626,61 +627,65 @@
         savedValue={savedProps.postProcess}
         onClick={toggleSavedProp} />
 
-      <button
-        class="btn btn-sm {postProcessInvert ? 'btn-secondary' : 'btn-outline-secondary'}"
+      <Button
+        size="sm"
+        pill={false}
+        variant={postProcessInvert ? "secondary" : "ghost"}
         onclick={() => {
           postProcessInvert = !postProcessInvert;
           updatePreview();
         }}>
         <MdIcon icon="invert_colors" />
-      </button>
+      </Button>
 
-      <button
-        class="btn btn-sm {postProcessMirror ? 'btn-secondary' : 'btn-outline-secondary'}"
+      <Button
+        size="sm"
+        pill={false}
+        variant={postProcessMirror ? "secondary" : "ghost"}
         onclick={() => {
           postProcessMirror = !postProcessMirror;
           updatePreview();
         }}>
         <MdIcon icon="flip" />
-      </button>
-    </div>
+      </Button>
+    </InputGroup>
 
     {#if !(postProcessType && ["bayer2", "bayer4", "bayer8"].includes(postProcessType))}
-      <div class="input-group input-group-sm">
-        <span class="input-group-text">{$tr("preview.threshold")}</span>
+      <InputGroup>
+        <InputAddon>{$tr("preview.threshold")}</InputAddon>
 
         <input
           type="range"
           id="threshold"
-          class="form-range"
+          class="min-h-8 flex-1 accent-accent"
           min="1"
           max="255"
           bind:value={thresholdValue}
           onchange={() => updateSavedProp("threshold", thresholdValue, true)} />
-        <span class="input-group-text">{thresholdValue}</span>
+        <InputAddon>{thresholdValue}</InputAddon>
 
         <ParamLockButton
           propName="threshold"
           value={thresholdValue}
           savedValue={savedProps.threshold}
           onClick={toggleSavedProp} />
-      </div>
+      </InputGroup>
     {/if}
 
     {#if postProcessType === "floyd_steinberg" || postProcessType === "jjn" || postProcessType === "stucki" || postProcessType === "dither"}
-      <div class="input-group input-group-sm">
-        <span class="input-group-text">{$tr("preview.strength")}</span>
+      <InputGroup>
+        <InputAddon>{$tr("preview.strength")}</InputAddon>
 
         <input
           type="range"
           id="strength"
-          class="form-range"
+          class="min-h-8 flex-1 accent-accent"
           min="0"
           max="1.5"
           step="0.1"
           bind:value={strengthValue}
           onchange={() => updateSavedProp("strength", strengthValue, true)} />
-        <span class="input-group-text">{strengthValue.toFixed(1)}</span>
+        <InputAddon>{strengthValue.toFixed(1)}</InputAddon>
 
         <ParamLockButton
           propName="strength"
@@ -688,25 +693,26 @@
           savedValue={savedProps.strength}
           onClick={toggleSavedProp} />
 
-        <button
-          class="btn btn-sm {serpentineValue ? 'btn-secondary' : 'btn-outline-secondary'}"
+        <Button
+          size="sm"
+          pill={false}
+          variant={serpentineValue ? "secondary" : "ghost"}
           title={$tr("preview.serpentine")}
           onclick={() => {
             serpentineValue = !serpentineValue;
             updateSavedProp("serpentine", serpentineValue, true);
           }}>
           <MdIcon icon="swap_vert" />
-        </button>
-
-      </div>
+        </Button>
+      </InputGroup>
     {/if}
 
-    <div class="input-group flex-nowrap input-group-sm">
-      <span class="input-group-text">{$tr("preview.copies")}</span>
-      <input
-        class="form-control"
+    <InputGroup>
+      <InputAddon>{$tr("preview.copies")}</InputAddon>
+      <TextField
         type="number"
         min="1"
+        class="min-h-8 text-[13px]"
         bind:value={quantity}
         disabled={copiesVary}
         onchange={onCopiesChanged} />
@@ -715,47 +721,45 @@
         value={quantity}
         savedValue={savedProps.quantity}
         onClick={toggleSavedProp} />
-    </div>
+    </InputGroup>
 
     {#if csvEnabled}
-      <button
-        type="button"
-        class="btn btn-outline-secondary"
+      <Button
         disabled={printState !== "idle" || csvTable.rows.length === 0}
         onclick={() => {
           advancedOpen = true;
         }}>
         {$tr("preview.advanced")}
-      </button>
+      </Button>
     {/if}
 
-    <div class="input-group flex-nowrap input-group-sm">
-      <span class="input-group-text">{$tr("preview.density")}</span>
-      <input
-        class="form-control"
+    <InputGroup>
+      <InputAddon>{$tr("preview.density")}</InputAddon>
+      <TextField
         type="number"
+        class="min-h-8 text-[13px]"
         min={$printerMeta?.densityMin ?? 1}
         max={$printerMeta?.densityMax ?? 20}
         bind:value={density}
         onchange={() => updateSavedProp("density", density)} />
       <ParamLockButton propName="density" value={density} savedValue={savedProps.density} onClick={toggleSavedProp} />
-    </div>
+    </InputGroup>
 
     {#if printTaskName === "D110M_V4"}
-      <div class="input-group flex-nowrap input-group-sm">
-        <span class="input-group-text">{$tr("preview.speed")}</span>
-        <select class="form-select" bind:value={speed} onchange={() => updateSavedProp("speed", speed, true)}>
+      <InputGroup>
+        <InputAddon>{$tr("preview.speed")}</InputAddon>
+        <SelectField class="min-h-8 text-[13px]" bind:value={speed} onchange={() => updateSavedProp("speed", speed, true)}>
           <option value={0}>{$tr("preview.speed.0")}</option>
           <option value={1}>{$tr("preview.speed.1")}</option>
-        </select>
+        </SelectField>
 
         <ParamLockButton propName="speed" value={speed} savedValue={savedProps.speed} onClick={toggleSavedProp} />
-      </div>
+      </InputGroup>
     {/if}
 
-    <div class="input-group input-group-sm">
-      <span class="input-group-text">{$tr("preview.label_type")}</span>
-      <select class="form-select" bind:value={labelType} onchange={() => updateSavedProp("labelType", labelType)}>
+    <InputGroup>
+      <InputAddon>{$tr("preview.label_type")}</InputAddon>
+      <SelectField class="min-h-8 text-[13px]" bind:value={labelType} onchange={() => updateSavedProp("labelType", labelType)}>
         {#each Object.values(LabelType) as lt (lt)}
           {#if typeof lt !== "string"}
             <option value={lt}>
@@ -764,19 +768,19 @@
             </option>
           {/if}
         {/each}
-      </select>
+      </SelectField>
 
       <ParamLockButton
         propName="labelType"
         value={labelType}
         savedValue={savedProps.labelType}
         onClick={toggleSavedProp} />
-    </div>
+    </InputGroup>
 
-    <div class="input-group input-group-sm">
-      <span class="input-group-text">{$tr("preview.print_task")}</span>
-      <select
-        class="form-select"
+    <InputGroup>
+      <InputAddon>{$tr("preview.print_task")}</InputAddon>
+      <SelectField
+        class="min-h-8 text-[13px]"
         bind:value={printTaskName}
         onchange={() => updateSavedProp("printTaskName", printTaskName)}>
         {#each printTaskNames as name (name)}
@@ -785,66 +789,62 @@
             {name}
           </option>
         {/each}
-      </select>
+      </SelectField>
 
       <ParamLockButton
         propName="printTaskName"
         value={printTaskName}
         savedValue={savedProps.printTaskName}
         onClick={toggleSavedProp} />
-    </div>
+    </InputGroup>
 
-    <div class="input-group input-group-sm">
-      <span class="input-group-text">{$tr("preview.offset")}</span>
+    <InputGroup>
+      <InputAddon>{$tr("preview.offset")}</InputAddon>
       {#if offsetWarning}
-        <span class="input-group-text text-warning" title={offsetWarning}><MdIcon icon="warning" /></span>
+        <InputAddon class="text-amber-600" title={offsetWarning}><MdIcon icon="warning" /></InputAddon>
       {/if}
-      <span class="input-group-text"><MdIcon icon="unfold_more" class="r-90" /></span>
-      <input
-        class="form-control"
+      <InputAddon><MdIcon icon="unfold_more" class="r-90" /></InputAddon>
+      <TextField
+        class="min-h-8 text-[13px]"
         type="number"
         bind:value={offset.x}
         onchange={() => updateSavedProp("offset", offset, true)} />
-      <span class="input-group-text"><MdIcon icon="unfold_more" /></span>
-      <input
-        class="form-control"
+      <InputAddon><MdIcon icon="unfold_more" /></InputAddon>
+      <TextField
+        class="min-h-8 text-[13px]"
         type="number"
         bind:value={offset.y}
         onchange={() => updateSavedProp("offset", offset, true)} />
-      <select
-        class="form-select"
+      <SelectField
+        class="min-h-8 text-[13px]"
         bind:value={offset.offsetType}
         onchange={() => updateSavedProp("offset", offset, true)}>
         <option value="inner">{$tr("preview.offset.inner")}</option>
         <option value="outer">{$tr("preview.offset.outer")}</option>
-      </select>
+      </SelectField>
 
       <ParamLockButton propName="offset" value={offset} savedValue={savedProps.offset} onClick={toggleSavedProp} />
-    </div>
+    </InputGroup>
 
-    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">{$tr("preview.close")}</button>
+    <Button onclick={() => modalRef.hide()}>{$tr("preview.close")}</Button>
 
     {#if printState !== "idle"}
-      <button type="button" class="btn btn-primary" disabled={$disconnected} onclick={endPrint}>
+      <Button variant="primary" disabled={$disconnected} onclick={endPrint}>
         {$tr("preview.print.cancel")}
-      </button>
+      </Button>
     {/if}
 
-    <button
-      type="button"
-      class="btn btn-secondary"
-      title={$tr("preview.print.system")}
-      onclick={onPrintOnSystemPrinter}>
+    <Button title={$tr("preview.print.system")} onclick={onPrintOnSystemPrinter}>
       <MdIcon icon="print" />
-    </button>
+    </Button>
 
-    <button type="button" class="btn btn-primary" disabled={$disconnected || printState !== "idle"} onclick={onPrint}>
+    <Button variant="primary" disabled={$disconnected || printState !== "idle"} onclick={onPrint}>
       {#if $disconnected}
         {$tr("preview.not_connected")}
       {:else}
         <MdIcon icon="print" /> {$tr("preview.print")}
       {/if}
-    </button>
+    </Button>
   {/snippet}
 </AppModal>
 
@@ -872,14 +872,5 @@
   }
   canvas.print-start-top {
     border-top: 2px solid #ff4646;
-  }
-  .progress-bar {
-    transition: none;
-  }
-  .input-group .form-range {
-    flex-grow: 1;
-    width: 1%;
-    height: unset;
-    padding: 0 1rem;
   }
 </style>

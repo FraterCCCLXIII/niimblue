@@ -1,5 +1,4 @@
 <script lang="ts">
-  import Dropdown from "bootstrap/js/dist/dropdown";
   import * as fabric from "fabric";
   import { onDestroy, onMount, tick } from "svelte";
   import { appConfig, automation, connectionState, csvData, loadedFonts } from "$/stores";
@@ -22,21 +21,24 @@
   import PrintPreview from "$/components/PrintPreview.svelte";
   import { DEFAULT_LABEL_PROPS, GRID_SIZE, OBJECT_DEFAULTS } from "$/defaults";
   import { LabelDesignerUtils } from "$/utils/label_designer_utils";
-  import SavedLabelsMenu from "$/components/designer-controls/SavedLabelsMenu.svelte";
   import { CustomCanvas } from "$/fabric-object/custom_canvas";
   import { CanvasUtils } from "$/utils/canvas_utils";
   import ElementPalette from "$/components/workspace/ElementPalette.svelte";
+  import LayersPanel from "$/components/workspace/LayersPanel.svelte";
   import InspectorPanel from "$/components/workspace/InspectorPanel.svelte";
   import LabelSettingsPanel from "$/components/workspace/LabelSettingsPanel.svelte";
   import ObjectSettingsPanel from "$/components/workspace/ObjectSettingsPanel.svelte";
   import CanvasRulers from "$/components/workspace/CanvasRulers.svelte";
   import { DEFAULT_DPMM, rotateLabelProps } from "$/utils/label_geometry";
   import { cloneLabelTemplate, normalizeLabelPrintDirection } from "$/utils/label_template";
-  import { fixedDropdown } from "$/utils/fixed_dropdown";
+  import { Button, IconButton, Menu, MenuItem } from "$/components/ui";
   import RenameLabelDialog from "$/components/workspace/RenameLabelDialog.svelte";
+  import LabelPropertiesDialog from "$/components/workspace/LabelPropertiesDialog.svelte";
   import CsvPageStrip from "$/components/workspace/CsvPageStrip.svelte";
+  import CsvControl from "$/components/designer-controls/CsvControl.svelte";
   import { CSV_FIELD_MIME, csvVariableToken, parseCsvTable } from "$/utils/csv_source";
   import { applyCsvPreview, cloneFabricJson, getCsvSource, serializeCanvasJson, setBoundText } from "$/utils/csv_preview";
+  import { applyCanvasLayerOrder, listCanvasLayers, moveLayer } from "$/utils/canvas_layers";
 
   interface Props {
     autoLoad?: boolean;
@@ -59,6 +61,7 @@
   let selectedObject = $state.raw<fabric.FabricObject | undefined>(undefined);
   let selectedCount = $state<number>(0);
   let editRevision = $state<number>(0);
+  let layerRevision = $state<number>(0);
   let printNow = $state<boolean>(false);
   let csvEnabled = $state<boolean>(false);
   let csvPage = $state(0);
@@ -76,6 +79,7 @@
   let pendingLabel = $state<ExportedLabelTemplate | undefined>(undefined);
   let pendingCsvEnabled = $state<boolean | undefined>(undefined);
   let renameOpen = $state(false);
+  let propertiesOpen = $state(false);
   let ignoreNextPasteEvent = false;
 
   const undo = new UndoRedo();
@@ -106,6 +110,7 @@
     } catch (error) {
       Toasts.error(error);
     }
+    layerRevision++;
     undo.paused = false;
   };
 
@@ -119,6 +124,11 @@
   const csvColumns = $derived(csvEnabled ? csvTable.columns : []);
   const csvRows = $derived(csvEnabled ? csvTable.rows : []);
   const csvVariables = $derived(csvRows[csvPage] ?? {});
+  const designerLayers = $derived.by(() => {
+    layerRevision;
+    editRevision;
+    return listCanvasLayers(fabricCanvas);
+  });
 
   const refreshCsvPreview = () => {
     if (!fabricCanvas) {
@@ -313,7 +323,7 @@
     if (LabelDesignerUtils.isAnyInputFocused(fabricCanvas)) {
       return false;
     }
-    return document.querySelectorAll(".dropdown-menu.show").length === 0;
+    return document.querySelectorAll("[role='menu']").length === 0;
   };
 
   const copySelectionToClipboard = (data?: DataTransfer | null) => {
@@ -434,9 +444,76 @@
     undo.push(fabricCanvas!, labelProps);
   };
 
-  export function openPreview() {
+  const selectLayer = (obj: fabric.FabricObject) => {
+    if (!fabricCanvas) {
+      return;
+    }
+    LabelDesignerUtils.selectObjects(fabricCanvas, [obj]);
+    selectedObject = obj;
+    selectedCount = 1;
+    editRevision++;
+  };
+
+  const reorderLayers = (fromIndex: number, insertBefore: number) => {
+    if (!fabricCanvas) {
+      return;
+    }
+    const current = listCanvasLayers(fabricCanvas).map((layer) => layer.object);
+    const next = moveLayer(current, fromIndex, insertBefore);
+    if (next === current) {
+      return;
+    }
+    applyCanvasLayerOrder(fabricCanvas, next);
+    undo.push(fabricCanvas, labelProps);
+    layerRevision++;
+  };
+
+  const cloneLayer = (obj: fabric.FabricObject) => {
+    selectLayer(obj);
+    cloneSelected();
+  };
+
+  const deleteLayer = (obj: fabric.FabricObject) => {
+    if (!fabricCanvas) {
+      return;
+    }
+    const wasSelected = fabricCanvas.getActiveObjects().includes(obj);
+    fabricCanvas.remove(obj);
+    if (wasSelected) {
+      discardSelection();
+    }
+  };
+
+  const bringLayerToFront = (obj: fabric.FabricObject) => {
+    if (!fabricCanvas) {
+      return;
+    }
+    fabricCanvas.bringObjectToFront(obj);
+    fabricCanvas.requestRenderAll();
+    undo.push(fabricCanvas, labelProps);
+    layerRevision++;
+  };
+
+  const sendLayerToBack = (obj: fabric.FabricObject) => {
+    if (!fabricCanvas) {
+      return;
+    }
+    fabricCanvas.sendObjectToBack(obj);
+    fabricCanvas.requestRenderAll();
+    undo.push(fabricCanvas, labelProps);
+    layerRevision++;
+  };
+
+  export const openPreview = () => {
     printNow = false;
     previewOpened = true;
+  };
+
+  export function exportPng() {
+    if (!fabricCanvas) {
+      return;
+    }
+    FileUtils.saveCanvasAsPng(fabricCanvas);
   }
 
   const openPreviewAndPrint = () => {
@@ -486,10 +563,6 @@
     fabricCanvas!.setActiveObject(obj);
     refreshCsvPreview();
     undo.push(fabricCanvas!, labelProps);
-  };
-
-  const onCsvPlaceholderPicked = (name: string) => {
-    addCsvField(name);
   };
 
   const pasteDesignerObjects = async (objects: Record<string, unknown>[]) => {
@@ -767,21 +840,22 @@
       Toasts.zodErrors(e, "Label parameters load error:");
     }
 
-    fabricCanvas = new CustomCanvas(htmlCanvas, {
+    const canvas = new CustomCanvas(htmlCanvas, {
       width: labelProps.size.width,
       height: labelProps.size.height,
     });
-    fabricCanvas.setLabelProps(labelProps);
-    fabricCanvas.onZoomChange = (z) => {
+    fabricCanvas = canvas;
+    canvas.setLabelProps(labelProps);
+    canvas.onZoomChange = (z) => {
       zoomRatio = z;
       if (!zoomFocused) {
         zoomInput = String(Math.round(z * 100));
       }
-      labelOrigin = fabricCanvas!.getLabelOriginScreen();
+      labelOrigin = canvas.getLabelOriginScreen();
       requestAnimationFrame(centerArtboard);
     };
-    fabricCanvas.onPan = panArtboard;
-    fabricCanvas.onArtboardFrame = (next, prev, shift) => {
+    canvas.onPan = panArtboard;
+    canvas.onArtboardFrame = (next, prev, shift) => {
       labelOrigin = { x: next.originX * next.zoom, y: next.originY * next.zoom };
       if (prev.zoom === next.zoom && canvasStage && (shift.x !== 0 || shift.y !== 0)) {
         canvasStage.scrollLeft += shift.x;
@@ -789,7 +863,7 @@
       }
       rulerRevision++;
     };
-    fabricCanvas.setGridEnabled(!!$appConfig.gridEnabled);
+    canvas.setGridEnabled(!!$appConfig.gridEnabled);
 
     if (pendingLabel) {
       const queued = pendingLabel;
@@ -803,16 +877,10 @@
 
     window.addEventListener("hashchange", loadLabelFromUrl);
 
-    undo.push(fabricCanvas, labelProps);
+    undo.push(canvas, labelProps);
     requestAnimationFrame(centerArtboard);
 
-    // force close dropdowns on touch devices
-    fabricCanvas.on("mouse:down", (): void => {
-      const dropdowns = document.querySelectorAll("[data-bs-toggle='dropdown']");
-      dropdowns.forEach((el) => new Dropdown(el).hide());
-    });
-
-    fabricCanvas.on("object:moving", (e): void => {
+    canvas.on("object:moving", (e): void => {
       if (e.target && e.target.left !== undefined && e.target.top !== undefined) {
         e.target.set({
           left: Math.round(e.target.left / GRID_SIZE) * GRID_SIZE,
@@ -821,53 +889,53 @@
       }
     });
 
-    fabricCanvas.on("object:modified", (e): void => {
+    canvas.on("object:modified", (e): void => {
       if (e.target) {
         CanvasUtils.bakeTextObjectScale(e.target);
       }
-      undo.push(fabricCanvas!, labelProps);
+      undo.push(canvas, labelProps);
     });
 
-    fabricCanvas.on("text:changed", () => {
+    canvas.on("text:changed", () => {
       editRevision++;
     });
 
-    fabricCanvas.on("object:removed", (): void => {
-      undo.push(fabricCanvas!, labelProps);
+    canvas.on("object:removed", (): void => {
+      undo.push(canvas, labelProps);
+      layerRevision++;
     });
 
     const syncSelection = (selected?: fabric.FabricObject[]) => {
-      const active = fabricCanvas.getActiveObject();
+      const active = canvas.getActiveObject();
       selectedCount = selected?.length ?? 0;
       selectedObject = active ?? (selected && selected.length > 0 ? selected[0] : undefined);
       editRevision++;
     };
 
-    fabricCanvas.on("selection:created", (e): void => {
+    canvas.on("selection:created", (e): void => {
       syncSelection(e.selected);
     });
 
-    fabricCanvas.on("selection:updated", (e): void => {
+    canvas.on("selection:updated", (e): void => {
       syncSelection(e.selected);
     });
 
-    fabricCanvas.on("selection:cleared", (): void => {
+    canvas.on("selection:cleared", (): void => {
       selectedObject = undefined;
       selectedCount = 0;
       editRevision++;
     });
 
-    fabricCanvas.on("dragover", (e): void => {
+    canvas.on("dragover", (e): void => {
       e.e.preventDefault();
     });
 
-    fabricCanvas.on("drop:after", async (e): Promise<void> => {
+    canvas.on("drop:after", async (e): Promise<void> => {
       const dragEvt = e.e as DragEvent;
       dragEvt.preventDefault();
 
       const field = dragEvt.dataTransfer?.getData(CSV_FIELD_MIME);
       if (field) {
-        const canvas = fabricCanvas!;
         const point = canvas.getScenePoint(dragEvt);
         addCsvField(field, { x: point.x, y: point.y });
         return;
@@ -878,7 +946,7 @@
       if (dragEvt.dataTransfer?.files) {
         for (const file of dragEvt.dataTransfer.files) {
           try {
-            await LabelDesignerObjectHelper.addImageFile(fabricCanvas!, file);
+            await LabelDesignerObjectHelper.addImageFile(canvas, file);
             dropped = true;
           } catch (e) {
             Toasts.error(e);
@@ -886,7 +954,7 @@
         }
 
         if (dropped) {
-          undo.push(fabricCanvas!, labelProps);
+          undo.push(canvas, labelProps);
         }
       }
     });
@@ -911,14 +979,17 @@
         const source = obj.text ?? "";
         setBoundText(obj, source, csvVariables);
         refreshCsvPreview();
-        undo.push(fabricCanvas!, labelProps);
+        undo.push(canvas, labelProps);
       });
     };
 
-    fabricCanvas.on("object:added", (e) => bindCsvEditing(e.target));
-    fabricCanvas.getObjects().forEach((obj) => bindCsvEditing(obj));
+    canvas.on("object:added", (e) => {
+      bindCsvEditing(e.target);
+      layerRevision++;
+    });
+    canvas.getObjects().forEach((obj) => bindCsvEditing(obj));
 
-    fabricCanvas.on("object:scaling", (e): void => {
+    canvas.on("object:scaling", (e): void => {
       if (!e.target) {
         return;
       }
@@ -1015,86 +1086,73 @@
 <svelte:window bind:innerWidth={windowWidth} onkeydown={onKeyDown} oncopy={onCopy} oncut={onCut} onpaste={onPaste} />
 
 <div class="image-editor designer-root">
-  <div class="workspace-toolbar">
-    <div class="workspace-toolbar__side workspace-toolbar__side--left">
-      <SavedLabelsMenu canvas={fabricCanvas!} onRequestLabelTemplate={exportCurrentLabel} {onLoadRequested} {csvEnabled} />
-    </div>
-    <div class="workspace-toolbar__center">
-      <button class="ws-btn ws-btn-ghost" disabled={undoState.undoDisabled} onclick={() => undo.undo()}>
-        <MdIcon icon="undo" />
-        {$tr("editor.undo")}
-      </button>
-      <button class="ws-btn ws-btn-ghost" disabled={undoState.redoDisabled} onclick={() => undo.redo()}>
-        <MdIcon icon="redo" />
-        {$tr("editor.redo")}
-      </button>
-    </div>
-    <div class="workspace-toolbar__side workspace-toolbar__side--right">
-      <div class="dropdown">
-        <button
-          type="button"
-          class="ws-btn ws-btn-icon"
-          data-bs-toggle="dropdown"
-          data-bs-auto-close="true"
-          use:fixedDropdown
-          title={$tr("editor.more")}
-          aria-label={$tr("editor.more")}>
-          <MdIcon icon="more_horiz" />
-        </button>
-        <div class="dropdown-menu dropdown-menu-end">
-          <button type="button" class="dropdown-item" onclick={clearCanvas}>
+  <div class="designer-workspace">
+    <aside class="designer-side designer-left">
+      <section class="file-name-header">
+        <h3 class="file-name-header__title">{labelTitle.trim() || $tr("editor.untitled")}</h3>
+        <Menu>
+          {#snippet trigger({ toggle })}
+            <IconButton title={$tr("editor.more")} aria-label={$tr("editor.more")} onclick={toggle}>
+              <MdIcon icon="more_horiz" />
+            </IconButton>
+          {/snippet}
+          <MenuItem disabled={undoState.undoDisabled} onclick={() => undo.undo()}>
+            <MdIcon icon="undo" />
+            {$tr("editor.undo")}
+          </MenuItem>
+          <MenuItem disabled={undoState.redoDisabled} onclick={() => undo.redo()}>
+            <MdIcon icon="redo" />
+            {$tr("editor.redo")}
+          </MenuItem>
+          <div class="my-1 h-px bg-line"></div>
+          <MenuItem onclick={clearCanvas}>
             <MdIcon icon="cancel_presentation" />
             {$tr("editor.clear")}
-          </button>
-          <button type="button" class="dropdown-item" onclick={() => (renameOpen = true)}>
+          </MenuItem>
+          <MenuItem onclick={() => (renameOpen = true)}>
             <MdIcon icon="edit" />
             {$tr("editor.rename")}
-          </button>
-          <button type="button" class="dropdown-item" onclick={duplicateCurrentLabel}>
+          </MenuItem>
+          <MenuItem onclick={() => (propertiesOpen = true)}>
+            <MdIcon icon="settings" />
+            {$tr("params.label.menu_title")}
+          </MenuItem>
+          <MenuItem onclick={duplicateCurrentLabel}>
             <MdIcon icon="content_copy" />
             {$tr("editor.duplicate")}
-          </button>
-          <button type="button" class="dropdown-item" onclick={deleteCurrentLabel}>
+          </MenuItem>
+          <MenuItem onclick={deleteCurrentLabel}>
             <MdIcon icon="delete" />
             {$tr("editor.delete")}
-          </button>
-          <div class="dropdown-divider"></div>
-          <button type="button" class="dropdown-item" onclick={exportCurrentFile}>
+          </MenuItem>
+          <div class="my-1 h-px bg-line"></div>
+          <MenuItem onclick={exportCurrentFile}>
             <MdIcon icon="download" />
             {$tr("editor.export")}
-          </button>
-          <button type="button" class="dropdown-item" onclick={() => void importElementsFromFile()}>
+          </MenuItem>
+          <MenuItem onclick={() => void importElementsFromFile()}>
             <MdIcon icon="upload" />
             {$tr("editor.import")}
-          </button>
-        </div>
+          </MenuItem>
+        </Menu>
+      </section>
+      <div class="palette-block palette-block--elements">
+        <ElementPalette
+          {labelProps}
+          onPick={onObjectPicked}
+          {onSvgIconPicked}
+          {zplImageReady}
+          {pdfImageReady} />
       </div>
-      <button class="ws-btn" onclick={openPreview}>
-        <MdIcon icon="visibility" />
-        {$tr("editor.preview")}
-      </button>
-      <button class="ws-btn" onclick={saveCurrentLabel}>
-        <MdIcon icon="save" />
-        {$tr("editor.save")}
-      </button>
-      <button class="ws-btn ws-btn-primary" onclick={openPreview} disabled={$connectionState !== "connected"}>
-        <MdIcon icon="print" />
-        {$tr("editor.print")}
-      </button>
-    </div>
-  </div>
-
-  <div class="designer-workspace">
-    <ElementPalette
-      {labelProps}
-      bind:csvEnabled
-      onPick={onObjectPicked}
-      {onSvgIconPicked}
-      {onCsvPlaceholderPicked}
-      {onCsvImported}
-      {onCsvCleared}
-      {zplImageReady}
-      {pdfImageReady} />
+      <LayersPanel
+        layers={designerLayers}
+        onSelect={selectLayer}
+        onReorder={reorderLayers}
+        onClone={cloneLayer}
+        onDelete={deleteLayer}
+        onBringToFront={bringLayerToFront}
+        onSendToBack={sendLayerToBack} />
+    </aside>
 
     <div class="designer-canvas-pane" class:has-page-strip={csvEnabled && csvRows.length > 0} use:artboardWheel>
       <div class="designer-canvas-main">
@@ -1115,43 +1173,50 @@
         </div>
       </CustomScroll>
       <div class="designer-canvas-footer">
-        <div class="zoom-control">
-          <button
-            type="button"
-            title={$tr("editor.zoom.out")}
-            disabled={zoomRatio <= 0.25}
-            onclick={() => fabricCanvas?.virtualZoomOut()}>
-            <MdIcon icon="zoom_out" />
-          </button>
-          <input
-            type="text"
-            inputmode="decimal"
-            aria-label={$tr("editor.zoom")}
-            value={zoomInput}
-            onfocus={() => (zoomFocused = true)}
-            oninput={(e) => (zoomInput = e.currentTarget.value)}
-            onblur={() => {
-              zoomFocused = false;
-              applyTypedZoom();
-            }}
-            onkeydown={(e) => {
-              if (e.key === "Enter") {
-                e.currentTarget.blur();
-              }
-            }} />
-          <span class="zoom-control__suffix">%</span>
-          <button
-            type="button"
-            title={$tr("editor.zoom.in")}
-            disabled={zoomRatio >= 4}
-            onclick={() => fabricCanvas?.virtualZoomIn()}>
-            <MdIcon icon="zoom_in" />
-          </button>
+        <div class="designer-canvas-footer__start">
+          <div class="zoom-control">
+            <button
+              type="button"
+              title={$tr("editor.zoom.out")}
+              disabled={zoomRatio <= 0.25}
+              onclick={() => fabricCanvas?.virtualZoomOut()}>
+              <MdIcon icon="zoom_out" />
+            </button>
+            <input
+              type="text"
+              inputmode="decimal"
+              aria-label={$tr("editor.zoom")}
+              value={zoomInput}
+              onfocus={() => (zoomFocused = true)}
+              oninput={(e) => (zoomInput = e.currentTarget.value)}
+              onblur={() => {
+                zoomFocused = false;
+                applyTypedZoom();
+              }}
+              onkeydown={(e) => {
+                if (e.key === "Enter") {
+                  e.currentTarget.blur();
+                }
+              }} />
+            <span class="zoom-control__suffix">%</span>
+            <button
+              type="button"
+              title={$tr("editor.zoom.in")}
+              disabled={zoomRatio >= 4}
+              onclick={() => fabricCanvas?.virtualZoomIn()}>
+              <MdIcon icon="zoom_in" />
+            </button>
+          </div>
         </div>
-        <button class="ws-btn" onclick={rotatePaper}>
+        <div class="designer-canvas-footer__cluster">
+        <Button onclick={rotatePaper}>
           <MdIcon icon="rotate_right" />
           {$tr("editor.rotate")}
-        </button>
+        </Button>
+        </div>
+        <div class="designer-canvas-footer__end">
+          <CsvControl bind:enabled={csvEnabled} onImported={onCsvImported} onCleared={onCsvCleared} />
+        </div>
       </div>
       </div>
       {#if csvEnabled && csvRows.length > 0}
@@ -1166,6 +1231,20 @@
     </div>
 
     <InspectorPanel {selectedCount}>
+      {#snippet actions()}
+        <Button class="flex-1 justify-center px-3 text-[13px]" onclick={openPreview}>
+          <MdIcon icon="visibility" />
+          {$tr("editor.preview")}
+        </Button>
+        <Button class="flex-1 justify-center px-3 text-[13px]" onclick={saveCurrentLabel}>
+          <MdIcon icon="save" />
+          {$tr("editor.save")}
+        </Button>
+        <Button variant="soft" class="flex-1 justify-center px-3 text-[13px]" onclick={openPreview} disabled={$connectionState !== "connected"}>
+          <MdIcon icon="print" />
+          {$tr("editor.print")}
+        </Button>
+      {/snippet}
       {#snippet label()}
         <LabelSettingsPanel {labelProps} bind:title={labelTitle} onChange={onUpdateLabelProps} onTitleChange={(value) => (labelTitle = value)} />
       {/snippet}
@@ -1196,6 +1275,7 @@
   {/if}
 
   <RenameLabelDialog bind:show={renameOpen} value={labelTitle.trim() || $tr("editor.untitled")} onRename={renameCurrentLabel} />
+  <LabelPropertiesDialog bind:show={propertiesOpen} {labelProps} onChange={onUpdateLabelProps} />
 </div>
 
 <style>
